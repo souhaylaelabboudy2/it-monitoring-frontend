@@ -26,7 +26,7 @@ function Dashboard() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
+   <div className="min-h-screen bg-white dark:bg-gray-900 text-black dark:text-white p-6">
       <NotificationPopup />
       
       <h1 className="text-3xl font-bold mb-8">
