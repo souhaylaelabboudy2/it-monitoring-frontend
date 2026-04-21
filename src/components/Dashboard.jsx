@@ -5,13 +5,13 @@ import ServerCard from "./ServerCard";
 import ServerChart from "./ServerChart";
 import NotificationPopup from "./NotificationPopup";
 import GlobalStats from "./GlobalStats";
+import NvrDashboard from "./NvrDashboard"; // 🟢 STEP 5
 import echo from "../echo";
 
 function Dashboard() {
   const [servers, setServers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 🟡 1. Polling as fallback only (15s instead of 5s)
   useEffect(() => {
     const fetchData = () => {
       API.get("/servers")
@@ -19,7 +19,6 @@ function Dashboard() {
           setServers(res.data);
           setLoading(false);
         })
-        // 🟡 4. Error handling
         .catch(() => {
           console.error("Error fetching servers");
           setLoading(false);
@@ -27,13 +26,11 @@ function Dashboard() {
     };
 
     fetchData();
-
     const interval = setInterval(fetchData, 15000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // 🟡 2. WebSocket with full cleanup
   useEffect(() => {
     const channel = echo.channel("servers");
 
@@ -63,9 +60,7 @@ function Dashboard() {
         <>
           <GlobalStats />
 
-          {/* 🟡 3. Added mt-6 for spacing */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-            {/* 🟡 5. key={server.id} — make sure id exists in DB */}
             {servers.map((server) => (
               <div key={server.id}>
                 <ServerCard server={server} />
@@ -73,6 +68,8 @@ function Dashboard() {
               </div>
             ))}
           </div>
+
+          <NvrDashboard /> {/* 🟢 STEP 5: NVR section integrated here */}
 
           <Alerts />
         </>
