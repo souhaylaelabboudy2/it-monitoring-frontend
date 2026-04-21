@@ -5,7 +5,14 @@ function Alerts() {
   const [alerts, setAlerts] = useState([]);
 
   useEffect(() => {
-    API.get("/alerts").then((res) => setAlerts(res.data));
+    const fetchAlerts = () => {
+      API.get("/alerts").then((res) => {
+        setAlerts(res.data);
+      });
+    };
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   return (

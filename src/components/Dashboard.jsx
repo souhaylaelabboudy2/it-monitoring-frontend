@@ -2,12 +2,25 @@ import { useEffect, useState } from "react";
 import API from "../services/api";
 import Alerts from "./Alerts";
 import ServerCard from "./ServerCard";
+import ServerChart from "./ServerChart";
 
 function Dashboard() {
   const [servers, setServers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    API.get("/servers").then((res) => setServers(res.data));
+    const fetchData = () => {
+      API.get("/servers").then((res) => {
+        setServers(res.data);
+        setLoading(false);
+      });
+    };
+
+    fetchData();
+
+    const interval = setInterval(fetchData, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -16,13 +29,22 @@ function Dashboard() {
         Infrastructure Monitoring System
       </h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {servers.map((server) => (
-          <ServerCard key={server.id} server={server} />
-        ))}
-      </div>
+      {loading ? (
+        <p className="text-gray-400">Loading...</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {servers.map((server) => (
+              <div key={server.id}>
+                <ServerCard server={server} />
+                <ServerChart server={server} />
+              </div>
+            ))}
+          </div>
 
-      <Alerts />
+          <Alerts />
+        </>
+      )}
     </div>
   );
 }
