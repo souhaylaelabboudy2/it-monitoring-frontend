@@ -5,6 +5,7 @@ import ServerCard from "./ServerCard";
 import ServerChart from "./ServerChart";
 import NotificationPopup from "./NotificationPopup";
 import GlobalStats from "./GlobalStats";
+import echo from "../echo";
 
 function Dashboard() {
   const [servers, setServers] = useState([]);
@@ -25,8 +26,16 @@ function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    echo.channel("servers").listen("ServerUpdated", (e) => {
+      setServers((prev) =>
+        prev.map((s) => (s.id === e.server.id ? e.server : s))
+      );
+    });
+  }, []);
+
   return (
-   <div className="min-h-screen bg-white dark:bg-gray-900 text-black dark:text-white p-6">
+    <div className="min-h-screen bg-white dark:bg-gray-900 text-black dark:text-white p-6">
       <NotificationPopup />
       
       <h1 className="text-3xl font-bold mb-8">
