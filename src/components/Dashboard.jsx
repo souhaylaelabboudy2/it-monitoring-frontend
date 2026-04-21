@@ -11,33 +11,48 @@ function Dashboard() {
   const [servers, setServers] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // 🟡 1. Polling as fallback only (15s instead of 5s)
   useEffect(() => {
     const fetchData = () => {
-      API.get("/servers").then((res) => {
-        setServers(res.data);
-        setLoading(false);
-      });
+      API.get("/servers")
+        .then((res) => {
+          setServers(res.data);
+          setLoading(false);
+        })
+        // 🟡 4. Error handling
+        .catch(() => {
+          console.error("Error fetching servers");
+          setLoading(false);
+        });
     };
 
     fetchData();
 
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 15000);
 
     return () => clearInterval(interval);
   }, []);
 
+  // 🟡 2. WebSocket with full cleanup
   useEffect(() => {
-    echo.channel("servers").listen("ServerUpdated", (e) => {
+    const channel = echo.channel("servers");
+
+    channel.listen("ServerUpdated", (e) => {
       setServers((prev) =>
-        prev.map((s) => (s.id === e.server.id ? e.server : s))
+        prev.map((s) => (s.name === e.server.name ? e.server : s))
       );
     });
+
+    return () => {
+      channel.stopListening("ServerUpdated");
+      echo.leaveChannel("servers");
+    };
   }, []);
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 text-black dark:text-white p-6">
       <NotificationPopup />
-      
+
       <h1 className="text-3xl font-bold mb-8">
         Infrastructure Monitoring System
       </h1>
@@ -47,8 +62,10 @@ function Dashboard() {
       ) : (
         <>
           <GlobalStats />
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+          {/* 🟡 3. Added mt-6 for spacing */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            {/* 🟡 5. key={server.id} — make sure id exists in DB */}
             {servers.map((server) => (
               <div key={server.id}>
                 <ServerCard server={server} />
