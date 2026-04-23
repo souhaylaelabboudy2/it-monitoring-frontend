@@ -1,11 +1,7 @@
 import Dashboard from "../components/Dashboard";
 
-function Home() {
-  return (
-    <div>
-      <Dashboard />
-    </div>
-  );
+function Home({ onLogout, toggleTheme }) {
+  return <Dashboard onLogout={onLogout} toggleTheme={toggleTheme} />;
 }
 
 export default Home;
