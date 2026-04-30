@@ -8,9 +8,7 @@ function GlobalStats() {
 
   const computeStats = (servers) => {
     const onlineCount = servers.filter(
-      (s) =>
-        s.status?.toLowerCase() === "online" ||
-        s.status?.toLowerCase() === "active"
+      (s) => s.status?.toLowerCase() === "online"
     ).length;
 
     setStats({
@@ -20,15 +18,30 @@ function GlobalStats() {
     });
   };
 
-  // ✅ Fallback polling 15s
+  // Transform Zabbix hosts to server format
+  const transformZabbixHosts = (hosts) => {
+    if (!Array.isArray(hosts)) return [];
+    
+    return hosts.map((host) => ({
+      id: host.hostid || Math.random(),
+      name: host.name || "Unknown Host",
+      status: host.status === "0" ? "online" : "offline", // 0=online, 1=offline
+      host: host.host || "",
+    }));
+  };
+
+  // ✅ Fetch from Zabbix API
   useEffect(() => {
     const fetchServers = async () => {
       try {
-        const response = await API.get("/servers");
-        computeStats(response.data);
+        const response = await API.get("/zabbix/hosts");
+        // Handle Zabbix API response format: { result: [ { hostid, name, status, ... } ] }
+        const hosts = response.data.result || response.data;
+        const transformedServers = transformZabbixHosts(hosts);
+        computeStats(transformedServers);
         setLoading(false);
       } catch (error) {
-        console.error("Error fetching servers:", error);
+        console.error("Error fetching Zabbix hosts:", error);
         setLoading(false);
       }
     };
@@ -46,13 +59,11 @@ function GlobalStats() {
     channel.listen("ServerUpdated", (e) => {
       setStats((prev) => {
         const wasOnline =
-          e.previous?.status?.toLowerCase() === "online" ||
-          e.previous?.status?.toLowerCase() === "active";
+          e.previous?.status?.toLowerCase() === "online";
         const isOnline =
-          e.server?.status?.toLowerCase() === "online" ||
-          e.server?.status?.toLowerCase() === "active";
+          e.server?.status?.toLowerCase() === "online";
 
-        if (wasOnline === isOnline) return prev; // مابدلش والو
+        if (wasOnline === isOnline) return prev;
 
         return {
           ...prev,

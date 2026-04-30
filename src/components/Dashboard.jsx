@@ -7,20 +7,41 @@ import NotificationPopup from "./NotificationPopup";
 import GlobalStats from "./GlobalStats";
 import NvrDashboard from "./NvrDashboard";
 import echo from "../echo";
+import { useNavigate } from "react-router-dom";
 
 function Dashboard({ onLogout, toggleTheme }) {
   const [servers, setServers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  // Transform Zabbix host data to server format
+  const transformZabbixHosts = (hosts) => {
+    if (!Array.isArray(hosts)) return [];
+    
+    return hosts.map((host) => ({
+      id: host.hostid || Math.random(),
+      name: host.name || "Unknown Host",
+      status: host.status === "0" ? "online" : "offline", // 0=online, 1=offline
+      cpu_usage: Math.floor(Math.random() * 100), // Simulated
+      ram_usage: Math.floor(Math.random() * 100), // Simulated
+      disk_usage: Math.floor(Math.random() * 100), // Simulated
+      host: host.host || "",
+      zabbix_status: host.status,
+    }));
+  };
 
   useEffect(() => {
     const fetchData = () => {
-      API.get("/servers")
+      API.get("/zabbix/hosts")
         .then((res) => {
-          setServers(res.data);
+          // Handle Zabbix API response format: { result: [ { hostid, name, status, ... } ] }
+          const hosts = res.data.result || res.data;
+          const transformedServers = transformZabbixHosts(hosts);
+          setServers(transformedServers);
           setLoading(false);
         })
-        .catch(() => {
-          console.error("Error fetching servers");
+        .catch((err) => {
+          console.error("Error fetching zabbix hosts:", err);
           setLoading(false);
         });
     };
@@ -56,6 +77,12 @@ function Dashboard({ onLogout, toggleTheme }) {
           <button onClick={onLogout} className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition">
             Logout
           </button>
+          <button
+  onClick={() => navigate("/incidents")}
+  className="bg-blue-600 px-4 py-2 rounded mb-6"
+>
+  Manage Incidents
+</button>
         </div>
       </div>
 
@@ -72,6 +99,7 @@ function Dashboard({ onLogout, toggleTheme }) {
               </div>
             ))}
           </div>
+          
           <NvrDashboard />
           <Alerts />
         </>
