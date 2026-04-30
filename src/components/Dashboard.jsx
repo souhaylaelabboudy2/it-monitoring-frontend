@@ -6,6 +6,7 @@ import ServerChart from "./ServerChart";
 import NotificationPopup from "./NotificationPopup";
 import GlobalStats from "./GlobalStats";
 import NvrDashboard from "./NvrDashboard";
+import BackupDashboard from "./BackupDashboard";
 import echo from "../echo";
 import { useNavigate } from "react-router-dom";
 
@@ -102,6 +103,9 @@ function Dashboard({ onLogout, toggleTheme }) {
           
           <NvrDashboard />
           <Alerts />
+          <div className="mt-8">
+            <BackupDashboard />
+          </div>
         </>
       )}
     </div>

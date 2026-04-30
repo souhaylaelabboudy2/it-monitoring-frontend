@@ -4,14 +4,11 @@ import API from "../services/api";
 function Incidents() {
   const [incidents, setIncidents] = useState([]);
   const [form, setForm] = useState({
-  title: "",
-  description: "",
-  severity: "low"
-});
+    title: "",
+    description: "",
+    severity: "low"
+  });
 
-
-
-  // 🟢 جلب البيانات
   const fetchIncidents = async () => {
     try {
       const res = await API.get("/incidents");
@@ -25,30 +22,27 @@ function Incidents() {
     fetchIncidents();
   }, []);
 
-  // 🟢 إضافة incident
   const addIncident = async () => {
-  try {
-    await API.post("/incidents", {
-      title: form.title,
-      description: form.description,
-      severity: form.severity,
-      status: "open"
-    });
+    try {
+      await API.post("/incidents", {
+        title: form.title,
+        description: form.description,
+        severity: form.severity,
+        status: "open"
+      });
 
-    setForm({
-      title: "",
-      description: "",
-      severity: "low"
-    });
+      setForm({
+        title: "",
+        description: "",
+        severity: "low"
+      });
 
-    fetchIncidents(); // refresh table
+      fetchIncidents();
+    } catch (err) {
+      console.log(err.response); // ✅ تم التغيير
+    }
+  };
 
-  } catch (err) {
-    console.error("Error:", err);
-  }
-};
-
-  // 🟢 resolve
   const resolveIncident = async (id) => {
     try {
       await API.put(`/incidents/${id}`, {
@@ -63,51 +57,40 @@ function Incidents() {
 
   return (
     <div className="p-6 text-white bg-gray-900 min-h-screen">
-
       <h2 className="text-2xl mb-4">Incidents</h2>
 
-      {/* 🟢 FORM */}
+      {/* FORM */}
       <div className="mb-6">
         <input
           type="text"
           placeholder="Title"
           className="p-2 mr-2 text-black"
           value={form.title}
-          onChange={(e) =>
-            setForm({ ...form, title: e.target.value })
-          }
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
         />
         <input
-  type="text"
-  placeholder="Description"
-  className="p-2 mr-2 text-black"
-  value={form.description}
-  onChange={(e) =>
-    setForm({ ...form, description: e.target.value })
-  }
-/>
-
+          type="text"
+          placeholder="Description"
+          className="p-2 mr-2 text-black"
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+        />
         <select
           className="p-2 mr-2 text-black"
           value={form.severity}
-          onChange={(e) =>
-            setForm({ ...form, severity: e.target.value })
-          }
+          onChange={(e) => setForm({ ...form, severity: e.target.value })}
         >
           <option value="low">Low</option>
           <option value="medium">Medium</option>
           <option value="high">High</option>
         </select>
 
-        <button
-          onClick={addIncident}
-          className="bg-blue-500 px-4 py-2 rounded"
-        >
+        <button onClick={addIncident} className="bg-blue-500 px-4 py-2 rounded">
           Add
         </button>
       </div>
 
-      {/* 🟢 TABLE */}
+      {/* TABLE */}
       <table className="w-full border border-gray-700">
         <thead>
           <tr className="bg-gray-800">
@@ -121,7 +104,6 @@ function Incidents() {
         <tbody>
           {incidents.map((inc) => (
             <tr key={inc.id} className="text-center border-t border-gray-700">
-
               <td>{inc.title}</td>
 
               <td>
@@ -141,9 +123,7 @@ function Incidents() {
               <td>
                 <span
                   className={
-                    inc.status === "resolved"
-                      ? "text-green-400"
-                      : "text-red-400"
+                    inc.status === "resolved" ? "text-green-400" : "text-red-400"
                   }
                 >
                   {inc.status}
@@ -160,7 +140,6 @@ function Incidents() {
                   </button>
                 )}
               </td>
-
             </tr>
           ))}
         </tbody>
