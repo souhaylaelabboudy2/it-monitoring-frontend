@@ -83,7 +83,7 @@ function BackupDashboard() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                    {new Date(backup.date).toLocaleString()}
+                    {backup.created_at ? new Date(backup.created_at).toLocaleString() : "N/A"}
                   </td>
                 </tr>
               ))}
