@@ -9,9 +9,14 @@ function Alerts() {
     setLoading(true);
     API.get("/alerts")
       .then((res) => {
-        setAlerts(res.data.data || []);
+        // Sort by latest last_seen
+        const allAlerts = res.data.data || [];
+        const sorted = allAlerts.sort((a, b) => 
+          new Date(b.last_seen) - new Date(a.last_seen)
+        );
+        setAlerts(sorted);
       })
-      .catch((err) => console.error("Erreur lors de la récupération des alertes:", err))
+      .catch((err) => console.error("Error fetching alerts:", err))
       .finally(() => setLoading(false));
   };
 
@@ -21,76 +26,137 @@ function Alerts() {
     return () => clearInterval(interval);
   }, []);
 
-  const getAlertColor = (type) => {
+  const getSeverityColor = (severity) => {
+    const severityLower = severity?.toLowerCase() || "info";
     const colors = {
-      server: { bg: "#f8d7da", border: "#f5c6cb", text: "#721c24" },
-      nvr: { bg: "#fff3cd", border: "#ffeaa7", text: "#856404" },
-      backup: { bg: "#d1ecf1", border: "#bee5eb", text: "#0c5460" },
-      general: { bg: "#e2e3e5", border: "#d3d4d5", text: "#383d41" }
+      critical: { badge: "bg-red-100 text-red-800" },
+      warning: { badge: "bg-yellow-100 text-yellow-800" },
+      info: { badge: "bg-blue-100 text-blue-800" }
     };
-    return colors[type] || colors.general;
+    return colors[severityLower] || colors.info;
   };
 
-  const getAlertIcon = (type) => {
-    const icons = {
-      server: "🖥️",
-      nvr: "📹",
-      backup: "💾",
-      general: "⚠️"
-    };
-    return icons[type] || icons.general;
+  const getStatusBadgeColor = (status) => {
+    const statusLower = status?.toLowerCase() || "open";
+    if (statusLower === "resolved") return "bg-green-100 text-green-800";
+    if (statusLower === "acknowledged") return "bg-orange-100 text-orange-800";
+    return "bg-red-100 text-red-800";
   };
 
-  return (
-    <div style={{ marginTop: "30px", padding: "20px", backgroundColor: "#fff", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
-      <h2 style={{ margin: "0 0 20px 0", color: "#333", fontSize: "20px", fontWeight: "600" }}>
-        🔔 Dernières Alertes
-      </h2>
+  // Group alerts by type and limit to 5 per group
+  const getAlertsByType = (type) => {
+    return alerts
+      .filter((a) => a.type?.toLowerCase() === type.toLowerCase())
+      .slice(0, 5);
+  };
 
-      {loading && <p style={{ color: "#999" }}>Chargement des alertes...</p>}
+  const AlertSection = ({ title, icon, type, alerts: sectionAlerts }) => (
+    <div className="mb-6">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-2xl">{icon}</span>
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+          {title}
+        </h3>
+        <span className="ml-auto px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-semibold rounded-full">
+          {sectionAlerts.length} alerts
+        </span>
+      </div>
 
-      {!loading && alerts.length === 0 && (
-        <p style={{ color: "#999", textAlign: "center", padding: "20px" }}>
-          ✅ Aucune alerte pour le moment
+      {sectionAlerts.length === 0 ? (
+        <p className="text-gray-500 dark:text-gray-400 text-sm py-4">
+          ✅ No {title.toLowerCase()} alerts
         </p>
-      )}
-
-      {!loading && alerts.length > 0 && (
-        <div>
-          <p style={{ color: "#666", fontSize: "12px", marginBottom: "10px" }}>
-            Total: {alerts.length} alerte(s)
-          </p>
-          <div style={{ display: "grid", gap: "10px" }}>
-            {alerts.map((alert) => {
-              const colors = getAlertColor(alert.type);
-              return (
-                <div
-                  key={alert.id}
-                  style={{
-                    backgroundColor: colors.bg,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: "5px",
-                    padding: "12px",
-                    color: colors.text
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-                    <div style={{ display: "flex", gap: "10px", alignItems: "start", flex: 1 }}>
-                      <span style={{ fontSize: "18px" }}>{getAlertIcon(alert.type)}</span>
-                      <div>
-                        <p style={{ margin: "0 0 5px 0", fontWeight: "600", fontSize: "14px" }}>
-                          {alert.message}
-                        </p>
-                        <p style={{ margin: "0", fontSize: "12px", opacity: 0.8 }}>
-                          Type: <strong>{alert.type}</strong> | {new Date(alert.created_at).toLocaleString()}
-                        </p>
-                      </div>
+      ) : (
+        <div className="space-y-2">
+          {sectionAlerts.map((alert) => {
+            const severityColors = getSeverityColor(alert.severity);
+            const statusColor = getStatusBadgeColor(alert.status);
+            return (
+              <div
+                key={alert.id}
+                className="p-4 bg-gray-50 dark:bg-gray-800 border-l-4 border-gray-300 dark:border-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-2">
+                      {alert.title}
+                    </h4>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold ${severityColors.badge}`}
+                      >
+                        {alert.severity?.toUpperCase() || "INFO"}
+                      </span>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold ${statusColor}`}
+                      >
+                        {alert.status}
+                      </span>
                     </div>
                   </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      {alert.last_seen
+                        ? new Date(alert.last_seen).toLocaleString()
+                        : "N/A"}
+                    </p>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const serverAlerts = getAlertsByType("server");
+  const backupAlerts = getAlertsByType("backup");
+  const nvrAlerts = getAlertsByType("nvr");
+
+  const totalAlerts = serverAlerts.length + backupAlerts.length + nvrAlerts.length;
+
+  return (
+    <div className="p-6 bg-white dark:bg-gray-900 rounded-lg shadow-lg">
+      <div className="flex items-center justify-between mb-8">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          🔔 Alerts Dashboard
+        </h2>
+        <span className="px-4 py-2 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full font-semibold">
+          Total: {totalAlerts}
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400">Loading alerts...</p>
+        </div>
+      ) : totalAlerts === 0 ? (
+        <div className="text-center py-12 bg-green-50 dark:bg-green-900 rounded-lg border-2 border-green-200 dark:border-green-700">
+          <p className="text-green-800 dark:text-green-200 font-semibold">
+            ✅ All systems normal - No alerts
+          </p>
+        </div>
+      ) : (
+        <div>
+          <AlertSection
+            title="Servers"
+            icon="🖥️"
+            type="server"
+            alerts={serverAlerts}
+          />
+          <AlertSection
+            title="Backups"
+            icon="💾"
+            type="backup"
+            alerts={backupAlerts}
+          />
+          <AlertSection
+            title="NVR Devices"
+            icon="📹"
+            type="nvr"
+            alerts={nvrAlerts}
+          />
         </div>
       )}
     </div>
