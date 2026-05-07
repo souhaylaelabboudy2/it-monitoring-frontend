@@ -4,17 +4,79 @@ import API from "../services/api";
 function Alerts() {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  // Track alert occurrences for deduplication and escalation state
+  const trackAlertHistory = (alerts) => {
+    const alertMap = new Map();
+    
+    alerts.forEach((alert) => {
+      const key = `${alert.title}_${alert.type}`;
+      if (alertMap.has(key)) {
+        const existing = alertMap.get(key);
+        // Track escalations (e.g., warning → critical)
+        if (
+          existing.severity?.toLowerCase() !== alert.severity?.toLowerCase()
+        ) {
+          existing.escalated = true;
+          existing.previousSeverity = existing.severity;
+          existing.currentSeverity = alert.severity;
+        }
+        existing.count = (existing.count || 1) + 1;
+        // Update to latest occurrence
+        if (new Date(alert.last_seen) > new Date(existing.last_seen)) {
+          existing.last_seen = alert.last_seen;
+        }
+      } else {
+        alertMap.set(key, { ...alert, count: 1 });
+      }
+    });
+
+    return Array.from(alertMap.values());
+  };
 
   const fetchAlerts = () => {
     setLoading(true);
     API.get("/alerts")
       .then((res) => {
-        // Sort by latest last_seen
-        const allAlerts = res.data.data || [];
-        const sorted = allAlerts.sort((a, b) => 
-          new Date(b.last_seen) - new Date(a.last_seen)
-        );
-        setAlerts(sorted);
+        const newData = res.data.data || [];
+        setAlerts((prev) => {
+          // Merge new alerts with existing ones (keep history)
+          const merged = newData.map((newAlert) => {
+            const existing = prev.find((p) => p.id === newAlert.id);
+            if (existing) {
+              // Preserve escalation tracking
+              return { ...newAlert, ...existing };
+            }
+            return newAlert;
+          });
+
+          // Add old alerts that are no longer in new data (keep history)
+          const oldAlerts = prev.filter(
+            (p) => !newData.some((n) => n.id === p.id)
+          );
+
+          const combined = [...merged, ...oldAlerts];
+
+          // Apply deduplication and escalation tracking
+          return trackAlertHistory(combined)
+            .sort((a, b) => {
+              // Sort by severity first (critical > warning > info)
+              const severityOrder = { critical: 0, warning: 1, info: 2 };
+              const aSev =
+                severityOrder[a.severity?.toLowerCase()] ||
+                severityOrder.info;
+              const bSev =
+                severityOrder[b.severity?.toLowerCase()] ||
+                severityOrder.info;
+
+              if (aSev !== bSev) return aSev - bSev;
+
+              // Then by timestamp (newest first)
+              return new Date(b.last_seen) - new Date(a.last_seen);
+            });
+        });
+        setLastRefresh(new Date());
       })
       .catch((err) => console.error("Error fetching alerts:", err))
       .finally(() => setLoading(false));
@@ -22,141 +84,307 @@ function Alerts() {
 
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 5000);
+    // Fetch every 45 seconds (between 30-60s as requested)
+    const interval = setInterval(fetchAlerts, 45000);
     return () => clearInterval(interval);
   }, []);
 
-  const getSeverityColor = (severity) => {
+  // Get severity styling with color variants
+  const getSeverityStyles = (severity) => {
     const severityLower = severity?.toLowerCase() || "info";
-    const colors = {
-      critical: { badge: "bg-red-100 text-red-800" },
-      warning: { badge: "bg-yellow-100 text-yellow-800" },
-      info: { badge: "bg-blue-100 text-blue-800" }
+    const styles = {
+      critical: {
+        icon: "🔴",
+        badge: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+        border: "border-l-4 border-red-500",
+        bg: "bg-red-50 dark:bg-red-900/20",
+        hover: "hover:bg-red-100 dark:hover:bg-red-900/30",
+        pill: "bg-red-200 dark:bg-red-800",
+      },
+      warning: {
+        icon: "⚠️",
+        badge: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+        border: "border-l-4 border-yellow-500",
+        bg: "bg-yellow-50 dark:bg-yellow-900/20",
+        hover: "hover:bg-yellow-100 dark:hover:bg-yellow-900/30",
+        pill: "bg-yellow-200 dark:bg-yellow-800",
+      },
+      info: {
+        icon: "ℹ️",
+        badge: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+        border: "border-l-4 border-blue-500",
+        bg: "bg-blue-50 dark:bg-blue-900/20",
+        hover: "hover:bg-blue-100 dark:hover:bg-blue-900/30",
+        pill: "bg-blue-200 dark:bg-blue-800",
+      },
     };
-    return colors[severityLower] || colors.info;
+    return styles[severityLower] || styles.info;
   };
 
   const getStatusBadgeColor = (status) => {
     const statusLower = status?.toLowerCase() || "open";
-    if (statusLower === "resolved") return "bg-green-100 text-green-800";
-    if (statusLower === "acknowledged") return "bg-orange-100 text-orange-800";
-    return "bg-red-100 text-red-800";
+    if (statusLower === "resolved")
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+    if (statusLower === "acknowledged")
+      return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200";
+    return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
   };
 
-  // Group alerts by type and limit to 5 per group
-  const getAlertsByType = (type) => {
-    return alerts
-      .filter((a) => a.type?.toLowerCase() === type.toLowerCase())
-      .slice(0, 5);
+  // Format relative time (e.g., "2 minutes ago")
+  const formatRelativeTime = (timestamp) => {
+    const now = new Date();
+    const alertTime = new Date(timestamp);
+    const diffMs = now - alertTime;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return alertTime.toLocaleDateString();
   };
 
-  const AlertSection = ({ title, icon, type, alerts: sectionAlerts }) => (
-    <div className="mb-6">
-      <div className="flex items-center gap-2 mb-4">
+  // Group alerts by severity
+  const groupAlertsBySeverity = () => {
+    const groups = {
+      critical: [],
+      warning: [],
+      info: [],
+    };
+
+    alerts.forEach((alert) => {
+      const severity = alert.severity?.toLowerCase() || "info";
+      if (groups[severity]) {
+        groups[severity].push(alert);
+      }
+    });
+
+    return groups;
+  };
+
+  // Group alerts by type within each severity
+  const getAlertsByTypeAndSeverity = (severity) => {
+    return alerts.filter(
+      (a) => a.severity?.toLowerCase() === severity.toLowerCase()
+    );
+  };
+
+  const AlertCard = ({ alert }) => {
+    const styles = getSeverityStyles(alert.severity);
+    const statusColor = getStatusBadgeColor(alert.status);
+
+    return (
+      <div
+        className={`${styles.bg} ${styles.border} ${styles.hover} p-5 rounded-lg shadow-md transition-all duration-200 hover:shadow-lg`}
+      >
+        <div className="flex items-start justify-between gap-4">
+          {/* Left section: Severity icon and content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl mt-0.5 flex-shrink-0">
+                {styles.icon}
+              </span>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-2 break-words">
+                  {alert.title}
+                  {alert.count > 1 && (
+                    <span className={`ml-2 inline-block px-2 py-1 rounded-full text-xs font-bold ${styles.pill} text-gray-900 dark:text-gray-100`}>
+                      x{alert.count}
+                    </span>
+                  )}
+                </h4>
+
+                {/* Escalation indicator */}
+                {alert.escalated && (
+                  <div className="mb-2 flex items-center gap-1 text-xs font-semibold text-orange-700 dark:text-orange-300">
+                    <span className="animate-pulse">↗️ ESCALATED:</span>
+                    <span>
+                      {alert.previousSeverity?.toUpperCase()} →{" "}
+                      {alert.currentSeverity?.toUpperCase()}
+                    </span>
+                  </div>
+                )}
+
+                {/* Badges */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${styles.badge}`}
+                  >
+                    {alert.severity?.toUpperCase() || "INFO"}
+                  </span>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusColor}`}
+                  >
+                    {alert.status?.toUpperCase() || "OPEN"}
+                  </span>
+                  {alert.type && (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                      {alert.type.toUpperCase()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right section: Timestamp */}
+          <div className="text-right flex-shrink-0">
+            <p className="text-xs text-gray-600 dark:text-gray-400 font-medium whitespace-nowrap">
+              {alert.last_seen
+                ? formatRelativeTime(alert.last_seen)
+                : "N/A"}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+              {alert.last_seen
+                ? new Date(alert.last_seen).toLocaleTimeString()
+                : ""}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const SeveritySection = ({ severity, icon, title, alerts: sectionAlerts }) => (
+    <div className="mb-8">
+      <div className="flex items-center gap-3 mb-4 pb-3 border-b-2 border-gray-200 dark:border-gray-700">
         <span className="text-2xl">{icon}</span>
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
           {title}
         </h3>
-        <span className="ml-auto px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-semibold rounded-full">
-          {sectionAlerts.length} alerts
+        <span className="ml-auto px-3 py-1 rounded-full text-xs font-semibold bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+          {sectionAlerts.length} {sectionAlerts.length === 1 ? "alert" : "alerts"}
         </span>
       </div>
 
       {sectionAlerts.length === 0 ? (
-        <p className="text-gray-500 dark:text-gray-400 text-sm py-4">
-          ✅ No {title.toLowerCase()} alerts
+        <p className="text-gray-500 dark:text-gray-400 text-sm py-6 text-center">
+          ✅ No {title.toLowerCase()}
         </p>
       ) : (
-        <div className="space-y-2">
-          {sectionAlerts.map((alert) => {
-            const severityColors = getSeverityColor(alert.severity);
-            const statusColor = getStatusBadgeColor(alert.status);
-            return (
-              <div
-                key={alert.id}
-                className="p-4 bg-gray-50 dark:bg-gray-800 border-l-4 border-gray-300 dark:border-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-2">
-                      {alert.title}
-                    </h4>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-semibold ${severityColors.badge}`}
-                      >
-                        {alert.severity?.toUpperCase() || "INFO"}
-                      </span>
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-semibold ${statusColor}`}
-                      >
-                        {alert.status}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                      {alert.last_seen
-                        ? new Date(alert.last_seen).toLocaleString()
-                        : "N/A"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        <div className="space-y-3">
+          {sectionAlerts.map((alert) => (
+            <AlertCard key={`${alert.id}_${alert.count}`} alert={alert} />
+          ))}
         </div>
       )}
     </div>
   );
 
-  const serverAlerts = getAlertsByType("server");
-  const backupAlerts = getAlertsByType("backup");
-  const nvrAlerts = getAlertsByType("nvr");
-
-  const totalAlerts = serverAlerts.length + backupAlerts.length + nvrAlerts.length;
+  const { critical, warning, info } = groupAlertsBySeverity();
+  const totalAlerts = alerts.length;
 
   return (
     <div className="p-6 bg-white dark:bg-gray-900 rounded-lg shadow-lg">
-      <div className="flex items-center justify-between mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
           🔔 Alerts Dashboard
         </h2>
-        <span className="px-4 py-2 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full font-semibold">
-          Total: {totalAlerts}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            Last updated: {formatRelativeTime(lastRefresh)}
+          </span>
+          <span
+            className={`px-4 py-2 rounded-full font-semibold text-sm ${
+              totalAlerts === 0
+                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                : critical.length > 0
+                ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 animate-pulse"
+                : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+            }`}
+          >
+            {totalAlerts > 0
+              ? `${totalAlerts} Alert${totalAlerts !== 1 ? "s" : ""}`
+              : "✅ All Clear"}
+          </span>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="text-center py-8">
-          <p className="text-gray-500 dark:text-gray-400">Loading alerts...</p>
+      {/* Severity summary */}
+      {totalAlerts > 0 && (
+        <div className="mb-6 grid grid-cols-3 gap-4">
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+            <div className="text-2xl font-bold text-red-800 dark:text-red-200">
+              🔴 {critical.length}
+            </div>
+            <div className="text-xs text-red-700 dark:text-red-300 font-semibold">
+              Critical
+            </div>
+          </div>
+          <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+            <div className="text-2xl font-bold text-yellow-800 dark:text-yellow-200">
+              ⚠️ {warning.length}
+            </div>
+            <div className="text-xs text-yellow-700 dark:text-yellow-300 font-semibold">
+              Warning
+            </div>
+          </div>
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="text-2xl font-bold text-blue-800 dark:text-blue-200">
+              ℹ️ {info.length}
+            </div>
+            <div className="text-xs text-blue-700 dark:text-blue-300 font-semibold">
+              Info
+            </div>
+          </div>
         </div>
-      ) : totalAlerts === 0 ? (
-        <div className="text-center py-12 bg-green-50 dark:bg-green-900 rounded-lg border-2 border-green-200 dark:border-green-700">
-          <p className="text-green-800 dark:text-green-200 font-semibold">
-            ✅ All systems normal - No alerts
+      )}
+
+      {/* Loading state */}
+      {loading && (
+        <div className="text-center py-12">
+          <div className="inline-block">
+            <div className="animate-spin text-3xl">⏳</div>
+            <p className="text-gray-500 dark:text-gray-400 mt-2">
+              Fetching alerts...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && totalAlerts === 0 && (
+        <div className="text-center py-16 bg-green-50 dark:bg-green-900/20 rounded-lg border-2 border-green-300 dark:border-green-700">
+          <p className="text-3xl mb-2">✅</p>
+          <p className="text-green-800 dark:text-green-200 font-semibold text-lg">
+            All systems nominal
+          </p>
+          <p className="text-green-700 dark:text-green-300 text-sm mt-1">
+            No active alerts at this time
           </p>
         </div>
-      ) : (
+      )}
+
+      {/* Alert sections by severity */}
+      {!loading && totalAlerts > 0 && (
         <div>
-          <AlertSection
-            title="Servers"
-            icon="🖥️"
-            type="server"
-            alerts={serverAlerts}
-          />
-          <AlertSection
-            title="Backups"
-            icon="💾"
-            type="backup"
-            alerts={backupAlerts}
-          />
-          <AlertSection
-            title="NVR Devices"
-            icon="📹"
-            type="nvr"
-            alerts={nvrAlerts}
-          />
+          {critical.length > 0 && (
+            <SeveritySection
+              severity="critical"
+              icon="🔴"
+              title="Critical Alerts"
+              alerts={critical}
+            />
+          )}
+          {warning.length > 0 && (
+            <SeveritySection
+              severity="warning"
+              icon="⚠️"
+              title="Warning Alerts"
+              alerts={warning}
+            />
+          )}
+          {info.length > 0 && (
+            <SeveritySection
+              severity="info"
+              icon="ℹ️"
+              title="Info Alerts"
+              alerts={info}
+            />
+          )}
         </div>
       )}
     </div>
