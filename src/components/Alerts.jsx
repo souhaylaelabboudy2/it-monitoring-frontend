@@ -146,29 +146,49 @@ function Alerts() {
     return alertTime.toLocaleDateString();
   };
 
-  // Group alerts by severity
-  const groupAlertsBySeverity = () => {
-    const groups = {
-      critical: [],
-      warning: [],
-      info: [],
-    };
+  // Group alerts by severity and then by type
+  const groupAlertsBySeverityAndType = () => {
+    const severities = { critical: {}, warning: {}, info: {} };
 
     alerts.forEach((alert) => {
       const severity = alert.severity?.toLowerCase() || "info";
-      if (groups[severity]) {
-        groups[severity].push(alert);
+      const type = alert.type?.toLowerCase() || "unknown";
+
+      if (severities[severity]) {
+        if (!severities[severity][type]) {
+          severities[severity][type] = [];
+        }
+        severities[severity][type].push(alert);
       }
     });
 
-    return groups;
+    return severities;
   };
 
-  // Group alerts by type within each severity
-  const getAlertsByTypeAndSeverity = (severity) => {
-    return alerts.filter(
-      (a) => a.severity?.toLowerCase() === severity.toLowerCase()
-    );
+  // Get icon for alert type
+  const getTypeIcon = (type) => {
+    const typeIcons = {
+      server: "🖥️",
+      backup: "💾",
+      nvr: "📹",
+      network: "🌐",
+      database: "🗄️",
+      default: "📋",
+    };
+    return typeIcons[type?.toLowerCase()] || typeIcons.default;
+  };
+
+  // Get color for alert type (subtle background)
+  const getTypeColor = (type) => {
+    const typeColors = {
+      server: "bg-purple-50 dark:bg-purple-900/10 border-l-4 border-purple-300 dark:border-purple-700",
+      backup: "bg-indigo-50 dark:bg-indigo-900/10 border-l-4 border-indigo-300 dark:border-indigo-700",
+      nvr: "bg-cyan-50 dark:bg-cyan-900/10 border-l-4 border-cyan-300 dark:border-cyan-700",
+      network: "bg-green-50 dark:bg-green-900/10 border-l-4 border-green-300 dark:border-green-700",
+      database: "bg-orange-50 dark:bg-orange-900/10 border-l-4 border-orange-300 dark:border-orange-700",
+      default: "bg-gray-50 dark:bg-gray-800 border-l-4 border-gray-300 dark:border-gray-700",
+    };
+    return typeColors[type?.toLowerCase()] || typeColors.default;
   };
 
   const AlertCard = ({ alert }) => {
@@ -231,50 +251,105 @@ function Alerts() {
 
           {/* Right section: Timestamp */}
           <div className="text-right flex-shrink-0">
-            <p className="text-xs text-gray-600 dark:text-gray-400 font-medium whitespace-nowrap">
-              {alert.last_seen
-                ? formatRelativeTime(alert.last_seen)
-                : "N/A"}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-              {alert.last_seen
-                ? new Date(alert.last_seen).toLocaleTimeString()
-                : ""}
-            </p>
+            <div className="text-xs">
+              {alert.created_at && (
+                <>
+                  <p className="text-gray-500 dark:text-gray-500 font-medium whitespace-nowrap">
+                    Created: {new Date(alert.created_at).toLocaleTimeString()}
+                  </p>
+                </>
+              )}
+              <p className="text-gray-600 dark:text-gray-400 font-medium whitespace-nowrap">
+                {alert.last_seen
+                  ? formatRelativeTime(alert.last_seen)
+                  : "N/A"}
+              </p>
+              <p className="text-gray-500 dark:text-gray-500 mt-1">
+                {alert.last_seen
+                  ? new Date(alert.last_seen).toLocaleTimeString()
+                  : ""}
+              </p>
+            </div>
           </div>
         </div>
       </div>
     );
   };
 
-  const SeveritySection = ({ severity, icon, title, alerts: sectionAlerts }) => (
-    <div className="mb-8">
-      <div className="flex items-center gap-3 mb-4 pb-3 border-b-2 border-gray-200 dark:border-gray-700">
-        <span className="text-2xl">{icon}</span>
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-          {title}
-        </h3>
-        <span className="ml-auto px-3 py-1 rounded-full text-xs font-semibold bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
-          {sectionAlerts.length} {sectionAlerts.length === 1 ? "alert" : "alerts"}
+  const SeveritySection = ({ severity, icon, title, typeGroups }) => {
+    const totalInSection = Object.values(typeGroups).reduce(
+      (sum, alerts) => sum + alerts.length,
+      0
+    );
+
+    return (
+      <div className="mb-10">
+        <div className="flex items-center gap-3 mb-6 pb-4 border-b-4 border-gray-300 dark:border-gray-600">
+          <span className="text-3xl">{icon}</span>
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {title}
+          </h3>
+          <span className="ml-auto px-4 py-2 rounded-full text-sm font-bold bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+            {totalInSection}
+          </span>
+        </div>
+
+        {totalInSection === 0 ? (
+          <p className="text-gray-500 dark:text-gray-400 text-sm py-8 text-center">
+            ✅ No {title.toLowerCase()}
+          </p>
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(typeGroups).map(([type, typeAlerts]) => {
+              if (typeAlerts.length === 0) return null;
+              return (
+                <TypeSubsection
+                  key={type}
+                  type={type}
+                  icon={getTypeIcon(type)}
+                  alerts={typeAlerts}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const TypeSubsection = ({ type, icon, alerts: typeAlerts }) => (
+    <div className={`${getTypeColor(type)} p-5 rounded-lg`}>
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xl">{icon}</span>
+        <h4 className="text-base font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
+          {type}
+        </h4>
+        <span className="ml-auto px-3 py-1 rounded-full text-xs font-semibold bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-gray-100">
+          {typeAlerts.length}
         </span>
       </div>
-
-      {sectionAlerts.length === 0 ? (
-        <p className="text-gray-500 dark:text-gray-400 text-sm py-6 text-center">
-          ✅ No {title.toLowerCase()}
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {sectionAlerts.map((alert) => (
-            <AlertCard key={`${alert.id}_${alert.count}`} alert={alert} />
-          ))}
-        </div>
-      )}
+      <div className="space-y-2 ml-6">
+        {typeAlerts.map((alert) => (
+          <AlertCard key={`${alert.id}_${alert.count}`} alert={alert} />
+        ))}
+      </div>
     </div>
   );
 
-  const { critical, warning, info } = groupAlertsBySeverity();
+  const groupedAlerts = groupAlertsBySeverityAndType();
   const totalAlerts = alerts.length;
+  const totalCritical = Object.values(groupedAlerts.critical).reduce(
+    (sum, arr) => sum + arr.length,
+    0
+  );
+  const totalWarning = Object.values(groupedAlerts.warning).reduce(
+    (sum, arr) => sum + arr.length,
+    0
+  );
+  const totalInfo = Object.values(groupedAlerts.info).reduce(
+    (sum, arr) => sum + arr.length,
+    0
+  );
 
   return (
     <div className="p-6 bg-white dark:bg-gray-900 rounded-lg shadow-lg">
@@ -291,7 +366,7 @@ function Alerts() {
             className={`px-4 py-2 rounded-full font-semibold text-sm ${
               totalAlerts === 0
                 ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                : critical.length > 0
+                : totalCritical > 0
                 ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 animate-pulse"
                 : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
             }`}
@@ -308,7 +383,7 @@ function Alerts() {
         <div className="mb-6 grid grid-cols-3 gap-4">
           <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
             <div className="text-2xl font-bold text-red-800 dark:text-red-200">
-              🔴 {critical.length}
+              🔴 {totalCritical}
             </div>
             <div className="text-xs text-red-700 dark:text-red-300 font-semibold">
               Critical
@@ -316,7 +391,7 @@ function Alerts() {
           </div>
           <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
             <div className="text-2xl font-bold text-yellow-800 dark:text-yellow-200">
-              ⚠️ {warning.length}
+              ⚠️ {totalWarning}
             </div>
             <div className="text-xs text-yellow-700 dark:text-yellow-300 font-semibold">
               Warning
@@ -324,7 +399,7 @@ function Alerts() {
           </div>
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <div className="text-2xl font-bold text-blue-800 dark:text-blue-200">
-              ℹ️ {info.length}
+              ℹ️ {totalInfo}
             </div>
             <div className="text-xs text-blue-700 dark:text-blue-300 font-semibold">
               Info
@@ -358,31 +433,31 @@ function Alerts() {
         </div>
       )}
 
-      {/* Alert sections by severity */}
+      {/* Alert sections by severity and type */}
       {!loading && totalAlerts > 0 && (
         <div>
-          {critical.length > 0 && (
+          {totalCritical > 0 && (
             <SeveritySection
               severity="critical"
               icon="🔴"
               title="Critical Alerts"
-              alerts={critical}
+              typeGroups={groupedAlerts.critical}
             />
           )}
-          {warning.length > 0 && (
+          {totalWarning > 0 && (
             <SeveritySection
               severity="warning"
               icon="⚠️"
               title="Warning Alerts"
-              alerts={warning}
+              typeGroups={groupedAlerts.warning}
             />
           )}
-          {info.length > 0 && (
+          {totalInfo > 0 && (
             <SeveritySection
               severity="info"
               icon="ℹ️"
               title="Info Alerts"
-              alerts={info}
+              typeGroups={groupedAlerts.info}
             />
           )}
         </div>
