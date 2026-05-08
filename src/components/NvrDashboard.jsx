@@ -44,9 +44,21 @@ function NvrDashboard() {
 
   const getStatusColor = (status) => {
     if (status?.toLowerCase() === "online" || status?.toLowerCase() === "active") {
-      return { bg: "bg-green-900", border: "border-green-500", text: "text-green-100", dot: "bg-green-500" };
+      return { 
+        bg: "bg-green-50 dark:bg-green-900/20", 
+        border: "border-green-200 dark:border-green-700", 
+        text: "text-green-800 dark:text-green-200", 
+        dot: "bg-green-500",
+        badge: "bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200"
+      };
     }
-    return { bg: "bg-red-900", border: "border-red-500", text: "text-red-100", dot: "bg-red-500" };
+    return { 
+      bg: "bg-red-50 dark:bg-red-900/20", 
+      border: "border-red-200 dark:border-red-700", 
+      text: "text-red-800 dark:text-red-200", 
+      dot: "bg-red-500",
+      badge: "bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200"
+    };
   };
 
   const getDiskUsageColor = (usage) => {
@@ -79,46 +91,65 @@ function NvrDashboard() {
             return (
               <div
                 key={nvr.id}
-                className="bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 p-6 hover:border-gray-400 dark:hover:border-gray-600 transition-all shadow-lg"
+                className={`${statusColors.bg} ${statusColors.border} border rounded-xl p-6 shadow-md hover:shadow-lg transition-all duration-200`}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <h3 className="text-lg font-semibold truncate">{nvr.name}</h3>
-                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${statusColors.bg} ${statusColors.border} border`}>
-                    <span className={`w-2 h-2 rounded-full ${statusColors.dot}`}></span>
-                    <span className={`text-xs font-medium ${statusColors.text}`}>{nvr.status}</span>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate">
+                      📹 {nvr.name}
+                    </h3>
+                    {nvr.location && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        📍 {nvr.location}
+                      </p>
+                    )}
+                  </div>
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${statusColors.badge} flex-shrink-0 ml-2`}>
+                    <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${statusColors.dot}`}></span>
+                    <span className="text-xs font-bold">{nvr.status?.toUpperCase()}</span>
                   </div>
                 </div>
 
+                {/* Cameras */}
                 <div className="mb-5 pb-5 border-b border-gray-300 dark:border-gray-700">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-500 dark:text-gray-400 text-sm">Cameras</span>
-                    <span className="font-semibold">{nvr.cameras_count || 0}</span>
+                    <span className="text-gray-600 dark:text-gray-400 text-sm font-semibold">
+                      🎥 Cameras
+                    </span>
+                    <span className="text-lg font-bold text-gray-900 dark:text-white">{nvr.cameras_count || 0}</span>
                   </div>
                 </div>
 
+                {/* Disk Usage */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-500 dark:text-gray-400 text-sm">Disk Usage</span>
-                    <span className="font-semibold text-sm">{diskUsagePercent}%</span>
+                    <span className="text-gray-600 dark:text-gray-400 text-sm font-semibold">
+                      💾 Storage
+                    </span>
+                    <span className={`text-sm font-bold ${
+                      diskUsagePercent >= 80 ? 'text-red-600 dark:text-red-400' :
+                      diskUsagePercent >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
+                      'text-green-600 dark:text-green-400'
+                    }`}>
+                      {diskUsagePercent}%
+                    </span>
                   </div>
-                  <div className="w-full bg-gray-300 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                  <div className="w-full bg-gray-300 dark:bg-gray-600 rounded-full h-2 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${getDiskUsageColor(diskUsagePercent)}`}
                       style={{ width: `${diskUsagePercent}%` }}
                     ></div>
                   </div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    {diskUsagePercent < 50 && "Storage healthy"}
-                    {diskUsagePercent >= 50 && diskUsagePercent < 80 && "Monitor storage"}
-                    {diskUsagePercent >= 80 && "Critical storage level"}
+                  <p className={`text-xs font-medium mt-1 ${
+                    diskUsagePercent >= 80 ? 'text-red-600 dark:text-red-400' :
+                    diskUsagePercent >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
+                    'text-green-600 dark:text-green-400'
+                  }`}>
+                    {diskUsagePercent < 50 && "✅ Storage healthy"}
+                    {diskUsagePercent >= 50 && diskUsagePercent < 80 && "⚠️ Monitor storage"}
+                    {diskUsagePercent >= 80 && "🔴 Critical storage level"}
                   </p>
                 </div>
-
-                {nvr.location && (
-                  <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-700">
-                    <p className="text-xs text-gray-400 dark:text-gray-500">Location: {nvr.location}</p>
-                  </div>
-                )}
               </div>
             );
           })}
