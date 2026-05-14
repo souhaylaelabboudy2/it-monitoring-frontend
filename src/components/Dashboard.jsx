@@ -37,65 +37,64 @@ function Dashboard({ onLogout, toggleTheme }) {
     }));
   };
 
-  // Fetch all monitoring data
-  const fetchAllData = () => {
-    setLoading(true);
-    Promise.all([
-      API.get("/zabbix/hosts").catch((err) => {
-        console.error("Error fetching servers:", err);
-        return { data: { result: [] } };
-      }),
-      API.get("/alerts").catch((err) => {
-        console.error("Error fetching alerts:", err);
-        return { data: { data: [] } };
-      }),
-      API.get("/incidents").catch((err) => {
-        console.error("Error fetching incidents:", err);
-        return { data: { data: [] } };
-      }),
-      API.get("/backups").catch((err) => {
-        console.error("Error fetching backups:", err);
-        return { data: { data: [] } };
-      }),
-      API.get("/nvrs").catch((err) => {
-        console.error("Error fetching NVRs:", err);
-        return { data: { data: [] } };
-      }),
-    ])
-      .then(([serversRes, alertsRes, incidentsRes, backupsRes, nvrsRes]) => {
-        const serverData = serversRes.data.result || serversRes.data;
-        setServers((prev) => {
-          const transformed = transformZabbixHosts(serverData);
-          // Merge with previous data to maintain history
-          return transformed.length > 0 ? transformed : prev;
-        });
-
-        setAlerts((prev) => {
-          const newAlerts = alertsRes.data.data || [];
-          return newAlerts.length > 0 ? newAlerts : prev;
-        });
-
-        setIncidents((prev) => {
-          const newIncidents = incidentsRes.data.data || [];
-          return newIncidents.length > 0 ? newIncidents : prev;
-        });
-
-        setBackups((prev) => {
-          const newBackups = backupsRes.data.data || [];
-          return newBackups.length > 0 ? newBackups : prev;
-        });
-
-        setNvrs((prev) => {
-          const newNvrs = nvrsRes.data.data || [];
-          return newNvrs.length > 0 ? newNvrs : prev;
-        });
-
-        setLastRefresh(new Date());
-        setLoading(false);
-      });
-  };
-
   useEffect(() => {
+    const fetchAllData = () => {
+      setLoading(true);
+      Promise.all([
+        API.get("/zabbix/hosts").catch((err) => {
+          console.error("Error fetching servers:", err);
+          return { data: { result: [] } };
+        }),
+        API.get("/alerts").catch((err) => {
+          console.error("Error fetching alerts:", err);
+          return { data: { data: [] } };
+        }),
+        API.get("/incidents").catch((err) => {
+          console.error("Error fetching incidents:", err);
+          return { data: { data: [] } };
+        }),
+        API.get("/backups").catch((err) => {
+          console.error("Error fetching backups:", err);
+          return { data: { data: [] } };
+        }),
+        API.get("/nvrs").catch((err) => {
+          console.error("Error fetching NVRs:", err);
+          return { data: { data: [] } };
+        }),
+      ])
+        .then(([serversRes, alertsRes, incidentsRes, backupsRes, nvrsRes]) => {
+          const serverData = serversRes.data.result || serversRes.data;
+          setServers((prev) => {
+            const transformed = transformZabbixHosts(serverData);
+            // Merge with previous data to maintain history
+            return transformed.length > 0 ? transformed : prev;
+          });
+
+          setAlerts((prev) => {
+            const newAlerts = alertsRes.data.data || [];
+            return newAlerts.length > 0 ? newAlerts : prev;
+          });
+
+          setIncidents((prev) => {
+            const newIncidents = incidentsRes.data.data || [];
+            return newIncidents.length > 0 ? newIncidents : prev;
+          });
+
+          setBackups((prev) => {
+            const newBackups = backupsRes.data.data || [];
+            return newBackups.length > 0 ? newBackups : prev;
+          });
+
+          setNvrs((prev) => {
+            const newNvrs = nvrsRes.data.data || [];
+            return newNvrs.length > 0 ? newNvrs : prev;
+          });
+
+          setLastRefresh(new Date());
+          setLoading(false);
+        });
+    };
+
     fetchAllData();
     const interval = setInterval(fetchAllData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
@@ -297,6 +296,12 @@ function Dashboard({ onLogout, toggleTheme }) {
             className="bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition"
           >
             🌓 Theme
+          </button>
+          <button
+            onClick={() => navigate("/reports")}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold transition"
+          >
+            📈 Reports
           </button>
           <button
             onClick={() => navigate("/incidents")}

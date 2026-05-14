@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
+import API from "../services/api";
 
 function Login({ onLogin, toggleTheme }) {
   const [email, setEmail] = useState("");
@@ -11,7 +11,7 @@ function Login({ onLogin, toggleTheme }) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post("http://127.0.0.1:8000/api/login", { email, password });
+      const res = await API.post("/login", { email, password });
       localStorage.setItem("token", res.data.token);
       onLogin();
     } catch (err) {

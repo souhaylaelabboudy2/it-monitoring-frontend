@@ -35,54 +35,54 @@ function Alerts() {
     return Array.from(alertMap.values());
   };
 
-  const fetchAlerts = () => {
-    setLoading(true);
-    API.get("/alerts")
-      .then((res) => {
-        const newData = res.data.data || [];
-        setAlerts((prev) => {
-          // Merge new alerts with existing ones (keep history)
-          const merged = newData.map((newAlert) => {
-            const existing = prev.find((p) => p.id === newAlert.id);
-            if (existing) {
-              // Preserve escalation tracking
-              return { ...newAlert, ...existing };
-            }
-            return newAlert;
-          });
-
-          // Add old alerts that are no longer in new data (keep history)
-          const oldAlerts = prev.filter(
-            (p) => !newData.some((n) => n.id === p.id)
-          );
-
-          const combined = [...merged, ...oldAlerts];
-
-          // Apply deduplication and escalation tracking
-          return trackAlertHistory(combined)
-            .sort((a, b) => {
-              // Sort by severity first (critical > warning > info)
-              const severityOrder = { critical: 0, warning: 1, info: 2 };
-              const aSev =
-                severityOrder[a.severity?.toLowerCase()] ||
-                severityOrder.info;
-              const bSev =
-                severityOrder[b.severity?.toLowerCase()] ||
-                severityOrder.info;
-
-              if (aSev !== bSev) return aSev - bSev;
-
-              // Then by timestamp (newest first)
-              return new Date(b.last_seen) - new Date(a.last_seen);
-            });
-        });
-        setLastRefresh(new Date());
-      })
-      .catch((err) => console.error("Error fetching alerts:", err))
-      .finally(() => setLoading(false));
-  };
-
   useEffect(() => {
+    const fetchAlerts = () => {
+      setLoading(true);
+      API.get("/alerts")
+        .then((res) => {
+          const newData = res.data.data || [];
+          setAlerts((prev) => {
+            // Merge new alerts with existing ones (keep history)
+            const merged = newData.map((newAlert) => {
+              const existing = prev.find((p) => p.id === newAlert.id);
+              if (existing) {
+                // Preserve escalation tracking
+                return { ...newAlert, ...existing };
+              }
+              return newAlert;
+            });
+
+            // Add old alerts that are no longer in new data (keep history)
+            const oldAlerts = prev.filter(
+              (p) => !newData.some((n) => n.id === p.id)
+            );
+
+            const combined = [...merged, ...oldAlerts];
+
+            // Apply deduplication and escalation tracking
+            return trackAlertHistory(combined)
+              .sort((a, b) => {
+                // Sort by severity first (critical > warning > info)
+                const severityOrder = { critical: 0, warning: 1, info: 2 };
+                const aSev =
+                  severityOrder[a.severity?.toLowerCase()] ||
+                  severityOrder.info;
+                const bSev =
+                  severityOrder[b.severity?.toLowerCase()] ||
+                  severityOrder.info;
+
+                if (aSev !== bSev) return aSev - bSev;
+
+                // Then by timestamp (newest first)
+                return new Date(b.last_seen) - new Date(a.last_seen);
+              });
+          });
+          setLastRefresh(new Date());
+        })
+        .catch((err) => console.error("Error fetching alerts:", err))
+        .finally(() => setLoading(false));
+    };
+
     fetchAlerts();
     // Fetch every 45 seconds (between 30-60s as requested)
     const interval = setInterval(fetchAlerts, 45000);
