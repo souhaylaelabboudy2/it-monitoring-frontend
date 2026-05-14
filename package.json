@@ -9,6 +9,8 @@
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.15.1",
     "chart.js": "^4.5.1",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.5.28",
     "laravel-echo": "^2.3.4",
     "pusher-js": "^8.5.0",
     "react": "^19.2.5",
