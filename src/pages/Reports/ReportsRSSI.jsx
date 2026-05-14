@@ -56,20 +56,25 @@ function ReportsRSSI({ toggleTheme }) {
     setError(null);
 
     try {
-      const [summaryRes, alertsRes, incidentsRes, backupsRes, nvrsRes, serversRes] = await Promise.all([
+      const [summaryRes, serversRes] = await Promise.all([
         API.get("/reports/rssi-summary").catch((error) => ({ error })),
-        API.get("/alerts").catch((error) => ({ error })),
-        API.get("/incidents").catch((error) => ({ error })),
-        API.get("/backups").catch((error) => ({ error })),
-        API.get("/nvrs").catch(() => API.get("/nvr").catch((error) => ({ error }))),
         API.get("/zabbix/hosts").catch((error) => ({ error })),
       ]);
 
-      setSummaryData(summaryRes.error ? null : summaryRes.data?.data || summaryRes.data || null);
-      setAlerts(alertsRes.error ? [] : alertsRes.data?.data || alertsRes.data || []);
-      setIncidents(incidentsRes.error ? [] : incidentsRes.data?.data || incidentsRes.data || []);
-      setBackups(backupsRes.error ? [] : backupsRes.data?.data || backupsRes.data || []);
-      setNvrs(nvrsRes.error ? [] : nvrsRes.data?.data || nvrsRes.data || []);
+      // Extract data using correct backend structure
+      const summary = summaryRes.error ? null : summaryRes.data?.summary || null;
+      const details = summaryRes.error ? {} : summaryRes.data?.details || {};
+      
+      const alertsData = details.alerts || [];
+      const incidentsData = details.incidents || [];
+      const backupsData = details.backups || [];
+      const nvrsData = details.nvrs || [];
+
+      setSummaryData(summary);
+      setAlerts(alertsData);
+      setIncidents(incidentsData);
+      setBackups(backupsData);
+      setNvrs(nvrsData);
       setServers(serversRes.error ? [] : transformServerHosts(serversRes.data?.result || serversRes.data || []));
       setLastUpdated(new Date());
     } catch (err) {
@@ -177,48 +182,22 @@ function ReportsRSSI({ toggleTheme }) {
     [nvrs, filters, filterByStatus, inDateRange]
   );
 
-  const alertMetrics = useMemo(() => {
-    const total = filteredAlerts.length;
-    const critical = filteredAlerts.filter((item) => (item.severity || "").toLowerCase() === "critical").length;
-    return { total, critical };
-  }, [filteredAlerts]);
-
-  const incidentMetrics = useMemo(() => {
-    const open = filteredIncidents.filter((item) => (item.status || "").toLowerCase() === "open").length;
-    return { open };
-  }, [filteredIncidents]);
-
-  const backupMetrics = useMemo(() => {
-    const success = filteredBackups.filter((item) => (item.status || "").toLowerCase() === "success").length;
-    const failed = filteredBackups.filter((item) => (item.status || "").toLowerCase() === "failed").length;
-    return { success, failed };
-  }, [filteredBackups]);
-
-  const nvrMetrics = useMemo(() => {
-    const online = filteredNvrs.filter((item) => (item.status || "").toLowerCase() === "online").length;
-    const offline = filteredNvrs.filter((item) => (item.status || "").toLowerCase() === "offline").length;
-    return { online, offline };
-  }, [filteredNvrs]);
-
-  const serverMetrics = useMemo(() => {
-    const online = filteredServers.filter((item) => (item.status || "").toLowerCase() === "online").length;
-    const offline = filteredServers.filter((item) => (item.status || "").toLowerCase() === "offline").length;
-    return { online, offline };
-  }, [filteredServers]);
-
   const summaryMetrics = useMemo(() => ({
-    totalServers: summaryData?.total_servers ?? servers.length,
-    onlineServers: summaryData?.online_servers ?? serverMetrics.online,
-    offlineServers: summaryData?.offline_servers ?? serverMetrics.offline,
-    totalAlerts: summaryData?.total_alerts ?? alerts.length,
-    criticalAlerts: summaryData?.critical_alerts ?? alertMetrics.critical,
-    openIncidents: summaryData?.open_incidents ?? incidentMetrics.open,
-    backupSuccess: summaryData?.backup_success ?? backupMetrics.success,
-    backupFailed: summaryData?.backup_failed ?? backupMetrics.failed,
-    totalNvrs: summaryData?.total_nvrs ?? nvrs.length,
-    onlineNvrs: summaryData?.online_nvrs ?? nvrMetrics.online,
-    offlineNvrs: summaryData?.offline_nvrs ?? nvrMetrics.offline,
-  }), [summaryData, alerts.length, backupMetrics, incidentMetrics, nvrMetrics, serverMetrics, nvrs.length, servers.length, alertMetrics]);
+    totalServers: summaryData?.total_servers ?? 0,
+    onlineServers: summaryData?.online_servers ?? 0,
+    offlineServers: summaryData?.offline_servers ?? 0,
+    totalAlerts: summaryData?.total_alerts ?? 0,
+    criticalAlerts: summaryData?.critical_alerts ?? 0,
+    warningAlerts: summaryData?.warning_alerts ?? 0,
+    infoAlerts: summaryData?.info_alerts ?? 0,
+    openIncidents: summaryData?.open_incidents ?? 0,
+    resolvedIncidents: summaryData?.resolved_incidents ?? 0,
+    backupSuccess: summaryData?.backup_success ?? 0,
+    backupFailed: summaryData?.backup_failures ?? 0,
+    totalNvrs: summaryData?.total_nvrs ?? 0,
+    onlineNvrs: nvrs.filter((item) => (item.status || "").toLowerCase() === "online").length,
+    offlineNvrs: nvrs.filter((item) => (item.status || "").toLowerCase() === "offline").length,
+  }), [summaryData, nvrs]);
 
   const chartData = useMemo(() => ({
     alertSeverity: {
@@ -226,9 +205,9 @@ function ReportsRSSI({ toggleTheme }) {
       datasets: [{
         label: "Alerts",
         data: [
-          alerts.filter((item) => (item.severity || "").toLowerCase() === "critical").length,
-          alerts.filter((item) => (item.severity || "").toLowerCase() === "warning").length,
-          alerts.filter((item) => (item.severity || "").toLowerCase() === "info").length,
+          summaryData?.critical_alerts ?? 0,
+          summaryData?.warning_alerts ?? 0,
+          summaryData?.info_alerts ?? 0,
         ],
         backgroundColor: ["#e11d48", "#f59e0b", "#2563eb"],
         borderWidth: 0,
@@ -239,8 +218,8 @@ function ReportsRSSI({ toggleTheme }) {
       datasets: [{
         label: "Incidents",
         data: [
-          incidents.filter((item) => (item.status || "").toLowerCase() === "open").length,
-          incidents.filter((item) => (item.status || "").toLowerCase() === "resolved").length,
+          summaryData?.open_incidents ?? 0,
+          summaryData?.resolved_incidents ?? 0,
         ],
         backgroundColor: ["#f97316", "#22c55e"],
       }],
@@ -250,8 +229,8 @@ function ReportsRSSI({ toggleTheme }) {
       datasets: [{
         label: "Backups",
         data: [
-          backups.filter((item) => (item.status || "").toLowerCase() === "success").length,
-          backups.filter((item) => (item.status || "").toLowerCase() === "failed").length,
+          summaryData?.backup_success ?? 0,
+          summaryData?.backup_failures ?? 0,
         ],
         backgroundColor: ["#22c55e", "#ef4444"],
       }],
@@ -260,7 +239,10 @@ function ReportsRSSI({ toggleTheme }) {
       labels: ["Online", "Offline"],
       datasets: [{
         label: "Servers",
-        data: [serverMetrics.online, serverMetrics.offline],
+        data: [
+          summaryData?.online_servers ?? 0,
+          summaryData?.offline_servers ?? 0,
+        ],
         backgroundColor: ["#14b8a6", "#f87171"],
       }],
     },
@@ -268,11 +250,14 @@ function ReportsRSSI({ toggleTheme }) {
       labels: ["Online", "Offline"],
       datasets: [{
         label: "NVRs",
-        data: [nvrMetrics.online, nvrMetrics.offline],
+        data: [
+          nvrs.filter((item) => (item.status || "").toLowerCase() === "online").length,
+          nvrs.filter((item) => (item.status || "").toLowerCase() === "offline").length,
+        ],
         backgroundColor: ["#38bdf8", "#f97316"],
       }],
     },
-  }), [alerts, incidents, backups, nvrMetrics, serverMetrics]);
+  }), [summaryData, nvrs]);
 
   const buildPdf = async (selected) => {
     setPdfLoading(true);

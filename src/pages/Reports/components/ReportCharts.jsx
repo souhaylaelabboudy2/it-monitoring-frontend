@@ -12,6 +12,16 @@ import { Bar, Doughnut } from "react-chartjs-2";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, Title);
 
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: "bottom",
+    },
+  },
+};
+
 function ReportCharts({ chartRefs, data }) {
   const { alertSeverity, incidentStatus, backupOutcome, serverStatus, nvrStatus } = data;
 
@@ -24,7 +34,9 @@ function ReportCharts({ chartRefs, data }) {
             <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Alert distribution</h3>
           </div>
         </div>
-        <Doughnut ref={chartRefs.alertSeverityRef} data={alertSeverity} options={{ responsive: true, plugins: { legend: { position: "bottom" } } }} />
+        <div style={{ height: "300px", width: "100%" }}>
+          <Doughnut ref={chartRefs.alertSeverityRef} data={alertSeverity} options={chartOptions} />
+        </div>
       </div>
 
       <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-6 shadow-sm">
@@ -34,7 +46,9 @@ function ReportCharts({ chartRefs, data }) {
             <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Incident state</h3>
           </div>
         </div>
-        <Bar ref={chartRefs.incidentStatusRef} data={incidentStatus} options={{ responsive: true, plugins: { legend: { display: false } } }} />
+        <div style={{ height: "300px", width: "100%" }}>
+          <Bar ref={chartRefs.incidentStatusRef} data={incidentStatus} options={chartOptions} />
+        </div>
       </div>
 
       <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-6 shadow-sm">
@@ -44,7 +58,9 @@ function ReportCharts({ chartRefs, data }) {
             <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Success vs failed</h3>
           </div>
         </div>
-        <Doughnut ref={chartRefs.backupOutcomeRef} data={backupOutcome} options={{ responsive: true, plugins: { legend: { position: "bottom" } } }} />
+        <div style={{ height: "300px", width: "100%" }}>
+          <Doughnut ref={chartRefs.backupOutcomeRef} data={backupOutcome} options={chartOptions} />
+        </div>
       </div>
 
       <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-6 shadow-sm xl:col-span-2">
@@ -54,7 +70,9 @@ function ReportCharts({ chartRefs, data }) {
             <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Server availability</h3>
           </div>
         </div>
-        <Bar ref={chartRefs.serverStatusRef} data={serverStatus} options={{ responsive: true, plugins: { legend: { display: false } } }} />
+        <div style={{ height: "300px", width: "100%" }}>
+          <Bar ref={chartRefs.serverStatusRef} data={serverStatus} options={chartOptions} />
+        </div>
       </div>
 
       <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-6 shadow-sm xl:col-span-1">
@@ -64,7 +82,9 @@ function ReportCharts({ chartRefs, data }) {
             <h3 className="text-xl font-semibold text-slate-900 dark:text-white">NVR availability</h3>
           </div>
         </div>
-        <Bar ref={chartRefs.nvrStatusRef} data={nvrStatus} options={{ responsive: true, plugins: { legend: { display: false } } }} />
+        <div style={{ height: "300px", width: "100%" }}>
+          <Bar ref={chartRefs.nvrStatusRef} data={nvrStatus} options={chartOptions} />
+        </div>
       </div>
     </div>
   );
