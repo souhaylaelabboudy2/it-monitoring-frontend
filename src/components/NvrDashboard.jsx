@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
+import DashboardNavbar from "./DashboardNavbar";
 import echo from "../echo";
 
-function NvrDashboard() {
+function NvrDashboard({ onLogout, toggleTheme }) {
   const [nvrs, setNvrs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
 
   useEffect(() => {
     const fetchNvrData = async () => {
@@ -17,6 +19,7 @@ function NvrDashboard() {
             ? response.data
             : []
         );
+        setLastRefresh(new Date());
         setLoading(false);
       } catch (error) {
         console.error("Error fetching NVR data:", error);
@@ -25,7 +28,7 @@ function NvrDashboard() {
     };
 
     fetchNvrData();
-    const interval = setInterval(fetchNvrData, 15000);
+    const interval = setInterval(fetchNvrData, 300000);
     return () => clearInterval(interval);
   }, []);
 
@@ -77,8 +80,13 @@ function NvrDashboard() {
   }
 
   return (
-    <div className="mt-10 text-black dark:text-white">
-      <h2 className="text-2xl font-bold mb-6">NVR Dashboard</h2>
+    <>
+      {onLogout && toggleTheme && <DashboardNavbar onLogout={onLogout} toggleTheme={toggleTheme} />}
+      <div className="mt-10 text-black dark:text-white p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold mb-6">NVR Dashboard</h2>
+          <div className="text-sm text-gray-500 dark:text-gray-400">Last updated: {lastRefresh.toLocaleString()}</div>
+        </div>
 
       {!Array.isArray(nvrs) || nvrs.length === 0 ? (
         <p className="text-gray-500 dark:text-gray-400">No NVR systems found</p>
@@ -156,6 +164,7 @@ function NvrDashboard() {
         </div>
       )}
     </div>
+    </>
   );
 }
 

@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
+import DashboardNavbar from "./DashboardNavbar";
 
-function BackupDashboard() {
+function BackupDashboard({ onLogout, toggleTheme }) {
   const [backups, setBackups] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
 
   useEffect(() => {
     const fetchBackups = () => {
       API.get("/backups")
         .then((res) => {
           setBackups(res.data.data);
+          setLastRefresh(new Date());
           setLoading(false);
         })
         .catch((err) => {
@@ -19,7 +22,7 @@ function BackupDashboard() {
     };
 
     fetchBackups();
-    const interval = setInterval(fetchBackups, 5000);
+    const interval = setInterval(fetchBackups, 300000);
     return () => clearInterval(interval);
   }, []);
 
@@ -64,11 +67,18 @@ function BackupDashboard() {
   const pendingCount = backups.filter(b => b.status?.toLowerCase() === "pending").length;
 
   return (
-    <div className="p-6 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
-          💾 Backup Dashboard
-        </h2>
+    <>
+      {onLogout && toggleTheme && <DashboardNavbar onLogout={onLogout} toggleTheme={toggleTheme} />}
+      <div className={onLogout && toggleTheme ? "p-6 bg-white dark:bg-gray-900" : "p-6 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700"}>
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
+              💾 Backup Dashboard
+            </h2>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Last updated: {lastRefresh.toLocaleString()}
+            </div>
+          </div>
         
         {/* Backup Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -129,6 +139,7 @@ function BackupDashboard() {
         </div>
       )}
     </div>
+    </>
   );
 }
 

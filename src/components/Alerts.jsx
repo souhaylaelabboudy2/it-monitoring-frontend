@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
+import DashboardNavbar from "./DashboardNavbar";
 
-function Alerts() {
+function Alerts({ onLogout, toggleTheme }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -84,8 +85,8 @@ function Alerts() {
     };
 
     fetchAlerts();
-    // Fetch every 45 seconds (between 30-60s as requested)
-    const interval = setInterval(fetchAlerts, 45000);
+    // Fetch every 5 minutes
+    const interval = setInterval(fetchAlerts, 300000);
     return () => clearInterval(interval);
   }, []);
 
@@ -352,12 +353,14 @@ function Alerts() {
   );
 
   return (
-    <div className="p-6 bg-white dark:bg-gray-900 rounded-lg shadow-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-          🔔 Alerts Dashboard
-        </h2>
+    <>
+      {onLogout && toggleTheme && <DashboardNavbar onLogout={onLogout} toggleTheme={toggleTheme} />}
+      <div className={onLogout && toggleTheme ? "p-6 bg-white dark:bg-gray-900" : "p-6 bg-white dark:bg-gray-900 rounded-lg shadow-lg"}>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+            🔔 Alerts Dashboard
+          </h2>
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-500 dark:text-gray-400">
             Last updated: {formatRelativeTime(lastRefresh)}
@@ -463,6 +466,7 @@ function Alerts() {
         </div>
       )}
     </div>
+    </>
   );
 }
 

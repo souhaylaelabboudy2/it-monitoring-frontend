@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
+import DashboardNavbar from "./DashboardNavbar";
 
-function Incidents() {
+function Incidents({ onLogout, toggleTheme }) {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [resolving, setResolving] = useState(null);
@@ -79,10 +80,10 @@ function Incidents() {
     }
   };
 
-  // Auto-refresh every 60 seconds
+  // Auto-refresh every 5 minutes
   useEffect(() => {
     fetchIncidents();
-    const interval = setInterval(fetchIncidents, 60000);
+    const interval = setInterval(fetchIncidents, 300000);
     return () => clearInterval(interval);
   }, []);
 
@@ -282,12 +283,14 @@ function Incidents() {
   ).length;
 
   return (
-    <div className="p-6 bg-white dark:bg-gray-900 rounded-lg shadow-lg">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-          📋 Incidents Dashboard
-        </h2>
+    <>
+      {onLogout && toggleTheme && <DashboardNavbar onLogout={onLogout} toggleTheme={toggleTheme} />}
+      <div className={onLogout && toggleTheme ? "p-6 bg-white dark:bg-gray-900" : "p-6 bg-white dark:bg-gray-900 rounded-lg shadow-lg"}>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+            📋 Incidents Dashboard
+          </h2>
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-500 dark:text-gray-400">
             Last updated: {formatRelativeTime(lastRefresh)}
@@ -385,6 +388,7 @@ function Incidents() {
         </div>
       )}
     </div>
+    </>
   );
 }
 
