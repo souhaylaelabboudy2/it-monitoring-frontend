@@ -82,24 +82,42 @@ function LandingPage({ toggleTheme }) {
         </nav>
 
         {/* HERO SECTION */}
-        <section className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-20 md:py-32">
-          <div className="max-w-7xl mx-auto px-6 text-center">
-            <h1 className="text-5xl md:text-6xl font-bold mb-6 text-slate-900 dark:text-white">
-              Infrastructure Monitoring System
+        <section className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 pt-6 pb-8 md:pb-10 min-h-[70vh] flex items-start">
+          <div className="max-w-7xl mx-auto px-6 w-full text-center flex flex-col items-center justify-start pt-4">
+            {/* Animated Logo */}
+           <div className="mb-[-20px] group inline-block cursor-pointer transition-transform duration-500 hover:scale-105">
+              <img
+                src={logo}
+                alt="Monitoring System Logo"
+                className="h-56 w-56 md:h-96 md:w-96 lg:h-[28rem] lg:w-[28rem] object-contain mx-auto drop-shadow-[0_0_56px_rgba(220,38,38,0.32)] animate-float"
+                style={{
+                  animation: 'float 3.5s ease-in-out infinite',
+                  transition: 'transform 0.5s ease',
+                }}
+              />
+            </div>
+            
+            {/* Title */}
+            <h1 className="text-4xl md:text-6xl font-bold mt-0 mb-3 text-slate-900 dark:text-white leading-tight">
+              Infrastructure <span className="text-red-600 block md:inline">Monitoring</span> System
             </h1>
-            <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 mb-12 max-w-2xl mx-auto">
+            
+            {/* Description */}
+            <p className="text-base md:text-lg text-slate-600 dark:text-slate-300 mb-4 max-w-2xl">
               A secure IT monitoring platform for supervising servers, backups, NVR systems, alerts, incidents, and RSSI reporting.
             </p>
-            <div className="flex flex-col md:flex-row gap-4 justify-center">
+            
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center flex-wrap">
               <button
                 onClick={() => navigate("/login")}
-                className="px-8 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition shadow-lg"
+                className="px-7 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition shadow-lg hover:shadow-xl transform hover:scale-105 duration-200"
               >
                 Sign In
               </button>
               <button
                 onClick={() => navigate("/register")}
-                className="px-8 py-3 border-2 border-red-600 text-red-600 font-semibold rounded-lg hover:bg-red-50 dark:hover:bg-slate-800 transition"
+                className="px-7 py-3 border-2 border-red-600 text-red-600 font-semibold rounded-lg hover:bg-red-50 dark:hover:bg-slate-800 transition shadow-lg hover:shadow-xl transform hover:scale-105 duration-200"
               >
                 Sign Up
               </button>
