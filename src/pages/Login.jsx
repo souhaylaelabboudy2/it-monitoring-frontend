@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 
 function Login({ onLogin, toggleTheme }) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -14,11 +16,12 @@ function Login({ onLogin, toggleTheme }) {
       const res = await API.post("/login", { email, password });
       localStorage.setItem("token", res.data.token);
       onLogin();
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       if (err.response?.status === 403) {
-        setError("Accès refusé — vous n'êtes pas autorisé");
+        setError("Access denied — you are not authorized");
       } else {
-        setError("Email ou mot de passe incorrect");
+        setError("Incorrect email or password");
       }
     }
     setLoading(false);
@@ -35,16 +38,16 @@ function Login({ onLogin, toggleTheme }) {
 
       <div className="flex items-center justify-center mt-20">
         <div className="bg-gray-100 dark:bg-gray-800 p-8 rounded-2xl w-96 shadow-lg">
-          <h2 className="text-2xl font-bold mb-2">Connexion</h2>
-          <p className="text-gray-500 dark:text-gray-400 mb-6">Connectez-vous pour accéder aux données</p>
+          <h2 className="text-2xl font-bold mb-2">Sign In</h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-6">Sign in to access your monitoring data</p>
           {error && <p className="text-red-400 mb-4">{error}</p>}
           <form onSubmit={handleSubmit}>
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-gray-200 dark:bg-gray-700 text-black dark:text-white p-3 rounded-lg mb-4" />
-            <input type="password" placeholder="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)}
+            <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-gray-200 dark:bg-gray-700 text-black dark:text-white p-3 rounded-lg mb-6" />
             <button type="submit" className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700">
-              {loading ? "Chargement..." : "Se connecter"}
+              {loading ? "Loading..." : "Sign in"}
             </button>
           </form>
         </div>
