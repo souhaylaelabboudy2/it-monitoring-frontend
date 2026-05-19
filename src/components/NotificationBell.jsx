@@ -1,14 +1,37 @@
 import { useRef, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useNotificationCenter } from "../Context/NotificationCenterContext";
 import { useNotification } from "../Context/NotificationContext";
 
 function NotificationBell() {
+  const navigate = useNavigate();
   const { notifications, readNotificationIds, markAsRead, markAllAsRead, unreadCount, criticalUnread } = useNotificationCenter();
   const { showInfo } = useNotification();
   const [isOpen, setIsOpen] = useState(false);
   const [shownCriticalIds, setShownCriticalIds] = useState(new Set());
   const bellRef = useRef(null);
   const dropdownRef = useRef(null);
+
+  // Map notification type to route
+  const getRouteFromNotification = (notification) => {
+    const type = notification.type?.toLowerCase();
+    const routeMap = {
+      alert: "/alerts",
+      incident: "/incidents",
+      backup: "/backups",
+      nvr: "/nvr",
+      server: "/servers",
+    };
+    return routeMap[type] || "/dashboard";
+  };
+
+  // Handle notification click - navigate to related page
+  const handleNotificationClick = (notification) => {
+    markAsRead(notification.id);
+    setIsOpen(false);
+    const route = getRouteFromNotification(notification);
+    navigate(route);
+  };
 
   // Show toast for new critical alerts
   useEffect(() => {
@@ -84,9 +107,7 @@ function NotificationBell() {
     const isRead = readNotificationIds.has(notification.id);
     return (
       <div
-        onClick={() => {
-          markAsRead(notification.id);
-        }}
+        onClick={() => handleNotificationClick(notification)}
         className={`p-4 border-l-4 cursor-pointer transition-all hover:shadow-md ${getSeverityColor(notification.severity)} ${
           !isRead ? "bg-opacity-60 dark:bg-opacity-40 font-medium" : "bg-opacity-30 dark:bg-opacity-20"
         }`}
