@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../services/api";
-import Alerts from "./Alerts";
-import ServerCard from "./ServerCard";
-import ServerChart from "./ServerChart";
 import NotificationPopup from "./NotificationPopup";
 import GlobalStats from "./GlobalStats";
-import NvrDashboard from "./NvrDashboard";
-import BackupDashboard from "./BackupDashboard";
-import Incidents from "./Incidents";
+import DashboardNavbar from "./DashboardNavbar";
 import echo from "../echo";
-import { useNavigate } from "react-router-dom";
+import { useRetryableApi } from "../hooks/useRetryableApi";
 
 function Dashboard({ onLogout, toggleTheme }) {
   const [servers, setServers] = useState([]);
@@ -19,32 +15,46 @@ function Dashboard({ onLogout, toggleTheme }) {
   const [nvrs, setNvrs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
-  const navigate = useNavigate();
+  const { fetchWithRetry } = useRetryableApi();
 
-  // Transform Zabbix host data to server format
+  // Transform Zabbix host data to server format - use real backend data only
   const transformZabbixHosts = (hosts) => {
     if (!Array.isArray(hosts)) return [];
 
     return hosts.map((host) => ({
-      id: host.hostid || Math.random(),
+      id: host.hostid,
       name: host.name || "Unknown Host",
       status: host.status === "0" ? "online" : "offline", // 0=online, 1=offline
-      cpu_usage: Math.floor(Math.random() * 100), // Simulated
-      ram_usage: Math.floor(Math.random() * 100), // Simulated
-      disk_usage: Math.floor(Math.random() * 100), // Simulated
+      cpu_usage: host.cpu_usage !== undefined ? host.cpu_usage : null,
+      ram_usage: host.ram_usage !== undefined ? host.ram_usage : null,
+      disk_usage: host.disk_usage !== undefined ? host.disk_usage : null,
       host: host.host || "",
       zabbix_status: host.status,
     }));
   };
 
   useEffect(() => {
-    const fetchAllData = () => {
+    const fetchAllData = async () => {
       setLoading(true);
+      try {
+        // Fetch Zabbix hosts with retry
+        const serversData = await fetchWithRetry(
+          async () => {
+            const res = await API.get("/zabbix/hosts");
+            return res.data?.value || res.data?.result || res.data;
+          },
+          "Server inventory",
+          3,
+          1000
+        );
+        setServers(transformZabbixHosts(serversData));
+      } catch (err) {
+        console.error("Failed to fetch servers even after retries:", err);
+        setServers([]);
+      }
+
+      // Fetch other data without retry (less critical)
       Promise.all([
-        API.get("/zabbix/hosts").catch((err) => {
-          console.error("Error fetching servers:", err);
-          return { data: { result: [] } };
-        }),
         API.get("/alerts").catch((err) => {
           console.error("Error fetching alerts:", err);
           return { data: { data: [] } };
@@ -62,14 +72,7 @@ function Dashboard({ onLogout, toggleTheme }) {
           return { data: { data: [] } };
         }),
       ])
-        .then(([serversRes, alertsRes, incidentsRes, backupsRes, nvrsRes]) => {
-          const serverData = serversRes.data.result || serversRes.data;
-          setServers((prev) => {
-            const transformed = transformZabbixHosts(serverData);
-            // Merge with previous data to maintain history
-            return transformed.length > 0 ? transformed : prev;
-          });
-
+        .then(([alertsRes, incidentsRes, backupsRes, nvrsRes]) => {
           setAlerts((prev) => {
             const newAlerts = alertsRes.data.data || [];
             return newAlerts.length > 0 ? newAlerts : prev;
@@ -96,9 +99,9 @@ function Dashboard({ onLogout, toggleTheme }) {
     };
 
     fetchAllData();
-    const interval = setInterval(fetchAllData, 30000); // Refresh every 30 seconds
+    const interval = setInterval(fetchAllData, 300000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchWithRetry]);
 
   useEffect(() => {
     const channel = echo.channel("servers");
@@ -176,11 +179,14 @@ function Dashboard({ onLogout, toggleTheme }) {
     return { total: nvrs.length, online, offline, recording };
   };
 
+  const navigate = useNavigate();
   const serverMetrics = getServerMetrics();
   const alertMetrics = getAlertMetrics();
   const incidentMetrics = getIncidentMetrics();
   const backupMetrics = getBackupMetrics();
   const nvrMetrics = getNvrMetrics();
+
+  const handleNavigate = (path) => () => navigate(path);
 
   // Status indicator component
   const StatusIndicator = ({ value, total, label, critical = 0, warning = 0 }) => {
@@ -279,43 +285,25 @@ function Dashboard({ onLogout, toggleTheme }) {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 text-black dark:text-white p-6">
-      <NotificationPopup />
+    <>
+      <DashboardNavbar onLogout={onLogout} toggleTheme={toggleTheme} />
+      <div className="min-h-screen bg-white dark:bg-gray-900 text-black dark:text-white p-6">
+        <NotificationPopup />
 
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-4xl font-bold">📊 Infrastructure Monitor</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Last updated: {formatRelativeTime(lastRefresh)}
           </p>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={toggleTheme}
-            className="bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-          >
-            🌓 Theme
-          </button>
-          <button
-            onClick={() => navigate("/reports")}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold transition"
-          >
-            📈 Reports
-          </button>
-          <button
-            onClick={() => navigate("/incidents")}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition"
-          >
-            📋 Incidents
-          </button>
-          <button
-            onClick={onLogout}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition"
-          >
-            🚪 Logout
-          </button>
-        </div>
+        <button
+          onClick={handleNavigate("/reports")}
+          className="inline-flex items-center px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition shadow-sm hover:-translate-y-0.5"
+        >
+          View Reports
+        </button>
       </div>
 
       {loading && servers.length === 0 ? (
@@ -330,47 +318,47 @@ function Dashboard({ onLogout, toggleTheme }) {
             <QuickStatsCard
               title="Servers"
               icon="🖥️"
-              onClick={() => document.getElementById("servers-section")?.scrollIntoView({ behavior: "smooth" })}
               metrics={{
                 Online: serverMetrics.online,
                 Offline: serverMetrics.offline,
               }}
+              onClick={handleNavigate("/servers")}
             />
             <QuickStatsCard
               title="Alerts"
               icon="🔔"
-              onClick={() => document.getElementById("alerts-section")?.scrollIntoView({ behavior: "smooth" })}
               metrics={{
                 Open: alertMetrics.open,
                 Critical: alertMetrics.critical,
               }}
+              onClick={handleNavigate("/alerts")}
             />
             <QuickStatsCard
               title="Incidents"
               icon="⚠️"
-              onClick={() => document.getElementById("incidents-section")?.scrollIntoView({ behavior: "smooth" })}
               metrics={{
                 Open: incidentMetrics.open,
                 Critical: incidentMetrics.critical,
               }}
+              onClick={handleNavigate("/incidents")}
             />
             <QuickStatsCard
               title="Backups"
               icon="💾"
-              onClick={() => document.getElementById("backups-section")?.scrollIntoView({ behavior: "smooth" })}
               metrics={{
                 Success: backupMetrics.successful,
                 Failed: backupMetrics.failed,
               }}
+              onClick={handleNavigate("/backups")}
             />
             <QuickStatsCard
               title="NVRs"
               icon="📹"
-              onClick={() => document.getElementById("nvrs-section")?.scrollIntoView({ behavior: "smooth" })}
               metrics={{
                 Online: nvrMetrics.online,
                 Recording: nvrMetrics.recording,
               }}
+              onClick={handleNavigate("/nvr")}
             />
           </div>
 
@@ -412,74 +400,11 @@ function Dashboard({ onLogout, toggleTheme }) {
           {/* Global Stats */}
           <GlobalStats />
 
-          {/* Servers Section */}
-          <div id="servers-section" className="mt-12 scroll-mt-6">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              🖥️ <span>Servers</span>
-              <span className="text-sm bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-full">
-                {serverMetrics.total}
-              </span>
-            </h2>
-            {servers.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {servers.map((server) => (
-                  <div key={server.id} className="space-y-4">
-                    <ServerCard server={server} />
-                    <ServerChart server={server} />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 dark:text-gray-400">No servers available</p>
-            )}
-          </div>
 
-          {/* NVRs Section */}
-          <div id="nvrs-section" className="mt-12 scroll-mt-6">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              📹 <span>NVRs</span>
-              <span className="text-sm bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-full">
-                {nvrMetrics.total}
-              </span>
-            </h2>
-            <NvrDashboard />
-          </div>
-
-          {/* Backups Section */}
-          <div id="backups-section" className="mt-12 scroll-mt-6">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              💾 <span>Backups</span>
-              <span className="text-sm bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-full">
-                {backupMetrics.total}
-              </span>
-            </h2>
-            <BackupDashboard />
-          </div>
-
-          {/* Alerts Section */}
-          <div id="alerts-section" className="mt-12 scroll-mt-6">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              🔔 <span>Alerts</span>
-              <span className="text-sm bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-full">
-                {alertMetrics.total}
-              </span>
-            </h2>
-            <Alerts />
-          </div>
-
-          {/* Incidents Section */}
-          <div id="incidents-section" className="mt-12 scroll-mt-6">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              ⚠️ <span>Incidents</span>
-              <span className="text-sm bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-full">
-                {incidentMetrics.total}
-              </span>
-            </h2>
-            <Incidents />
-          </div>
         </>
       )}
     </div>
+    </>
   );
 }
 

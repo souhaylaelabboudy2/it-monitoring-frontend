@@ -18,12 +18,12 @@ function GlobalStats() {
     });
   };
 
-  // Transform Zabbix hosts to server format
+  // Transform Zabbix hosts to server format - use real backend data only
   const transformZabbixHosts = (hosts) => {
     if (!Array.isArray(hosts)) return [];
     
     return hosts.map((host) => ({
-      id: host.hostid || Math.random(),
+      id: host.hostid,
       name: host.name || "Unknown Host",
       status: host.status === "0" ? "online" : "offline", // 0=online, 1=offline
       host: host.host || "",
@@ -36,7 +36,8 @@ function GlobalStats() {
       try {
         const response = await API.get("/zabbix/hosts");
         // Handle Zabbix API response format: { result: [ { hostid, name, status, ... } ] }
-        const hosts = response.data.result || response.data;
+        // Support different API shapes: { value: [...] } or { result: [...] } or direct array
+        const hosts = response.data?.value || response.data?.result || response.data;
         const transformedServers = transformZabbixHosts(hosts);
         computeStats(transformedServers);
         setLoading(false);
