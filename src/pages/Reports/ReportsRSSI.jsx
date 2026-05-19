@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import API from "../../services/api";
+import DashboardNavbar from "../../components/DashboardNavbar";
 import ReportSummaryCards from "./components/ReportSummaryCards";
 import ReportFilters from "./components/ReportFilters";
 import ReportCharts from "./components/ReportCharts";
 import ReportTables from "./components/ReportTables";
 import ExportPDFModal from "./components/ExportPDFModal";
+import { useRetryableApi } from "../../hooks/useRetryableApi";
 
-function ReportsRSSI({ toggleTheme }) {
+function ReportsRSSI({ onLogout, toggleTheme }) {
   const [summaryData, setSummaryData] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [incidents, setIncidents] = useState([]);
@@ -17,6 +18,7 @@ function ReportsRSSI({ toggleTheme }) {
   const [nvrs, setNvrs] = useState([]);
   const [servers, setServers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
     fromDate: "",
@@ -34,59 +36,92 @@ function ReportsRSSI({ toggleTheme }) {
   const backupRef = useRef(null);
   const serverRef = useRef(null);
   const nvrRef = useRef(null);
+  const autoRefreshIntervalRef = useRef(null);
+  const { fetchWithRetry } = useRetryableApi();
 
-  const navigate = useNavigate();
+  const AUTO_REFRESH_INTERVAL = 300000; // 5 minutes
 
   const transformServerHosts = (hosts) => {
     if (!Array.isArray(hosts)) return [];
     return hosts.map((host) => ({
-      id: host.hostid || host.id || Math.random(),
+      id: host.hostid,
       name: host.name || host.host || "Server",
       status: host.status === "0" || host.status?.toLowerCase() === "online" ? "online" : "offline",
-      cpu_usage: host.cpu_usage ?? host.cpu ?? Math.floor(Math.random() * 100),
-      ram_usage: host.ram_usage ?? host.ram ?? Math.floor(Math.random() * 100),
-      disk_usage: host.disk_usage ?? host.disk ?? Math.floor(Math.random() * 100),
+      cpu_usage: host.cpu_usage !== undefined ? host.cpu_usage : null,
+      ram_usage: host.ram_usage !== undefined ? host.ram_usage : null,
+      disk_usage: host.disk_usage !== undefined ? host.disk_usage : null,
       host: host.host || host.name || "",
       created_at: host.created_at || host.last_seen || "",
     }));
   };
 
-  const fetchAllData = useCallback(async () => {
-    setLoading(true);
+  const fetchAllData = useCallback(async (isAutoRefresh = false) => {
+    if (isAutoRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
 
     try {
-      const [summaryRes, serversRes] = await Promise.all([
-        API.get("/reports/rssi-summary").catch((error) => ({ error })),
-        API.get("/zabbix/hosts").catch((error) => ({ error })),
-      ]);
+      // Fetch RSSI summary
+      const summaryRes = await API.get("/reports/rssi-summary").catch((error) => ({ error }));
+
+      // Fetch Zabbix hosts with retry
+      const serversRes = await fetchWithRetry(
+        async () => {
+          const res = await API.get("/zabbix/hosts");
+          return res;
+        },
+        "Zabbix hosts",
+        2,
+        800
+      ).catch((error) => ({ error }));
 
       // Extract data using correct backend structure
-      const summary = summaryRes.error ? null : summaryRes.data?.summary || null;
+      const summary = summaryRes.error ? {} : summaryRes.data?.summary || {};
       const details = summaryRes.error ? {} : summaryRes.data?.details || {};
-      
+
       const alertsData = details.alerts || [];
       const incidentsData = details.incidents || [];
       const backupsData = details.backups || [];
       const nvrsData = details.nvrs || [];
+      
+      const hostsData = serversRes.error
+        ? []
+        : serversRes.data?.value || serversRes.data?.result || serversRes.data || [];
 
       setSummaryData(summary);
       setAlerts(alertsData);
       setIncidents(incidentsData);
       setBackups(backupsData);
       setNvrs(nvrsData);
-      setServers(serversRes.error ? [] : transformServerHosts(serversRes.data?.result || serversRes.data || []));
+      setServers(transformServerHosts(hostsData));
       setLastUpdated(new Date());
     } catch (err) {
       console.error("Failed to load RSSI report data:", err);
       setError("Unable to load report data. Please try again later.");
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
-  }, []);
+  }, [fetchWithRetry]);
 
   useEffect(() => {
     fetchAllData();
+  }, [fetchAllData]);
+
+  // Auto-refresh every 5 minutes
+  useEffect(() => {
+    autoRefreshIntervalRef.current = setInterval(() => {
+      fetchAllData(true);
+    }, AUTO_REFRESH_INTERVAL);
+
+    return () => {
+      if (autoRefreshIntervalRef.current) {
+        clearInterval(autoRefreshIntervalRef.current);
+      }
+    };
   }, [fetchAllData]);
 
   const parseDate = useCallback((timestamp) => {
@@ -183,21 +218,26 @@ function ReportsRSSI({ toggleTheme }) {
   );
 
   const summaryMetrics = useMemo(() => ({
-    totalServers: summaryData?.total_servers ?? 0,
-    onlineServers: summaryData?.online_servers ?? 0,
-    offlineServers: summaryData?.offline_servers ?? 0,
-    totalAlerts: summaryData?.total_alerts ?? 0,
-    criticalAlerts: summaryData?.critical_alerts ?? 0,
-    warningAlerts: summaryData?.warning_alerts ?? 0,
-    infoAlerts: summaryData?.info_alerts ?? 0,
-    openIncidents: summaryData?.open_incidents ?? 0,
-    resolvedIncidents: summaryData?.resolved_incidents ?? 0,
-    backupSuccess: summaryData?.backup_success ?? 0,
-    backupFailed: summaryData?.backup_failures ?? 0,
-    totalNvrs: summaryData?.total_nvrs ?? 0,
+    // Prefer real Zabbix hosts when available (servers array). Fallback to summaryData when empty.
+    totalServers: (Array.isArray(servers) && servers.length) ? servers.length : (summaryData?.total_servers || 0),
+    onlineServers: (Array.isArray(servers) && servers.length)
+      ? servers.filter((s) => (s.status || "").toLowerCase() === "online").length
+      : (summaryData?.online_servers || 0),
+    offlineServers: (Array.isArray(servers) && servers.length)
+      ? servers.filter((s) => (s.status || "").toLowerCase() === "offline").length
+      : (summaryData?.offline_servers || 0),
+    totalAlerts: alerts.length,
+    criticalAlerts: alerts.filter((a) => (a.severity || "").toLowerCase() === "critical").length,
+    warningAlerts: alerts.filter((a) => (a.severity || "").toLowerCase() === "warning").length,
+    infoAlerts: alerts.filter((a) => (a.severity || "").toLowerCase() === "info").length,
+    openIncidents: incidents.filter((i) => (i.status || "").toLowerCase() === "open").length,
+    resolvedIncidents: incidents.filter((i) => (i.status || "").toLowerCase() === "resolved").length,
+    backupSuccess: backups.filter((b) => (b.status || "").toLowerCase() === "success").length,
+    backupFailed: backups.filter((b) => (b.status || "").toLowerCase() === "failed").length,
+    totalNvrs: nvrs.length,
     onlineNvrs: nvrs.filter((item) => (item.status || "").toLowerCase() === "online").length,
     offlineNvrs: nvrs.filter((item) => (item.status || "").toLowerCase() === "offline").length,
-  }), [summaryData, nvrs]);
+  }), [summaryData, alerts, incidents, backups, nvrs, servers]);
 
   const chartData = useMemo(() => ({
     alertSeverity: {
@@ -205,9 +245,9 @@ function ReportsRSSI({ toggleTheme }) {
       datasets: [{
         label: "Alerts",
         data: [
-          summaryData?.critical_alerts ?? 0,
-          summaryData?.warning_alerts ?? 0,
-          summaryData?.info_alerts ?? 0,
+          alerts.filter((a) => (a.severity || "").toLowerCase() === "critical").length,
+          alerts.filter((a) => (a.severity || "").toLowerCase() === "warning").length,
+          alerts.filter((a) => (a.severity || "").toLowerCase() === "info").length,
         ],
         backgroundColor: ["#e11d48", "#f59e0b", "#2563eb"],
         borderWidth: 0,
@@ -218,8 +258,8 @@ function ReportsRSSI({ toggleTheme }) {
       datasets: [{
         label: "Incidents",
         data: [
-          summaryData?.open_incidents ?? 0,
-          summaryData?.resolved_incidents ?? 0,
+          incidents.filter((i) => (i.status || "").toLowerCase() === "open").length,
+          incidents.filter((i) => (i.status || "").toLowerCase() === "resolved").length,
         ],
         backgroundColor: ["#f97316", "#22c55e"],
       }],
@@ -229,8 +269,8 @@ function ReportsRSSI({ toggleTheme }) {
       datasets: [{
         label: "Backups",
         data: [
-          summaryData?.backup_success ?? 0,
-          summaryData?.backup_failures ?? 0,
+          backups.filter((b) => (b.status || "").toLowerCase() === "success").length,
+          backups.filter((b) => (b.status || "").toLowerCase() === "failed").length,
         ],
         backgroundColor: ["#22c55e", "#ef4444"],
       }],
@@ -240,8 +280,8 @@ function ReportsRSSI({ toggleTheme }) {
       datasets: [{
         label: "Servers",
         data: [
-          summaryData?.online_servers ?? 0,
-          summaryData?.offline_servers ?? 0,
+          servers.filter((s) => (s.status || "").toLowerCase() === "online").length,
+          servers.filter((s) => (s.status || "").toLowerCase() === "offline").length,
         ],
         backgroundColor: ["#14b8a6", "#f87171"],
       }],
@@ -257,7 +297,7 @@ function ReportsRSSI({ toggleTheme }) {
         backgroundColor: ["#38bdf8", "#f97316"],
       }],
     },
-  }), [summaryData, nvrs]);
+  }), [alerts, incidents, backups, servers, nvrs]);
 
   const buildPdf = async (selected) => {
     setPdfLoading(true);
@@ -450,40 +490,35 @@ function ReportsRSSI({ toggleTheme }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-950 dark:text-slate-100 p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">RSSI Reporting</p>
-          <h1 className="mt-2 text-4xl font-semibold text-slate-900 dark:text-white">Infrastructure Monitoring System</h1>
-          <p className="mt-3 text-slate-600 dark:text-slate-300 max-w-2xl">
-            Comprehensive RSSI reporting with dynamic charts, tables, filters, and export-ready PDF output for operations and executive insights.
-          </p>
-          <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-            Last refreshed: {lastUpdated.toLocaleString()}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="rounded-2xl border border-slate-300 bg-white text-slate-900 px-5 py-3 text-sm font-semibold shadow-sm hover:border-slate-400 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 transition"
-          >
-            🌓 Theme
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate("/")}
-            className="rounded-2xl border border-slate-300 bg-white text-slate-900 px-5 py-3 text-sm font-semibold shadow-sm hover:border-slate-400 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 transition"
-          >
-            Back to dashboard
-          </button>
-          <button
-            type="button"
-            onClick={() => setModalOpen(true)}
-            className="rounded-2xl bg-slate-950 text-white px-5 py-3 text-sm font-semibold shadow-sm hover:bg-slate-800 transition"
-          >
-            Export report
-          </button>
+    <>
+      {onLogout && toggleTheme && <DashboardNavbar onLogout={onLogout} toggleTheme={toggleTheme} />}
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-950 dark:text-slate-100 p-6">
+        <div className="rounded-3xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 shadow-sm overflow-hidden mb-8">
+        <div className="h-1 bg-rose-600" />
+        <div className="p-8 lg:p-10 text-center">
+          <div className="mx-auto max-w-3xl">
+            <p className="text-sm uppercase tracking-[0.35em] text-rose-600">RSSI REPORTING</p>
+            <h1 className="mt-4 text-5xl font-semibold text-slate-950 dark:text-white">Infrastructure Monitoring System</h1>
+            <div className="mx-auto mt-4 h-2 w-28 rounded-full bg-rose-500 shadow-[0_0_25px_rgba(244,63,94,0.24)]" />
+            <p className="mt-5 text-slate-600 dark:text-slate-300 leading-7">
+              Comprehensive RSSI reporting with dynamic charts, tables, filters, and export-ready PDF output for operations and executive insights. Data auto-refreshes every 5 minutes.
+            </p>
+            <p className="mt-4 text-sm text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
+              {isRefreshing && <span className="inline-block w-2 h-2 bg-rose-600 rounded-full animate-pulse" />}
+              Last refreshed: {lastUpdated.toLocaleString()}
+            </p>
+          </div>
+
+          <div className="mt-8 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-500/20 transition hover:bg-rose-500"
+            >
+              <span className="text-base">⬇️</span>
+              Export report
+            </button>
+          </div>
         </div>
       </div>
 
@@ -493,7 +528,7 @@ function ReportsRSSI({ toggleTheme }) {
         </div>
       )}
 
-      <ReportFilters filters={filters} onFilterChange={setFilters} onRefresh={fetchAllData} />
+      <ReportFilters filters={filters} onFilterChange={setFilters} onRefresh={fetchAllData} isRefreshing={isRefreshing} />
       <ReportSummaryCards metrics={summaryMetrics} loading={loading} />
       <ReportCharts chartRefs={{
         alertSeverityRef: alertRef,
@@ -512,6 +547,7 @@ function ReportsRSSI({ toggleTheme }) {
       />
       <ExportPDFModal open={modalOpen} onClose={() => setModalOpen(false)} onGenerate={handleGeneratePdf} loading={pdfLoading} />
     </div>
+    </>
   );
 }
 

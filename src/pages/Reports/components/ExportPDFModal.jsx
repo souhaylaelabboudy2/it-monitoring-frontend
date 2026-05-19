@@ -59,11 +59,13 @@ function ExportPDFModal({ open, onClose, onGenerate, loading }) {
               key={section.key}
               type="button"
               onClick={() => toggleSection(section.key)}
-              className={`rounded-3xl border p-4 text-left transition ${selected[section.key] ? "border-slate-900 bg-slate-100 dark:border-slate-400 dark:bg-slate-900" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"}`}
+              className={`rounded-3xl border p-4 text-left transition ${selected[section.key] ? "border-rose-500 bg-rose-50 text-rose-950 dark:border-rose-400 dark:bg-rose-950 dark:text-white" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white"}`}
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold text-slate-900 dark:text-white">{section.label}</span>
-                <span className="text-sm text-slate-500 dark:text-slate-400">{selected[section.key] ? "Included" : "Excluded"}</span>
+                <span className="font-semibold">{section.label}</span>
+                <span className={`text-sm ${selected[section.key] ? "text-rose-600 dark:text-rose-300" : "text-slate-500 dark:text-slate-400"}`}>
+                  {selected[section.key] ? "Included" : "Excluded"}
+                </span>
               </div>
             </button>
           ))}
