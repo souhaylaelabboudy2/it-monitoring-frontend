@@ -15,17 +15,23 @@ import { NotificationProvider } from "./Context/NotificationContext";
 import { NotificationCenterProvider } from "./Context/NotificationCenterContext";
 import Toast from "./components/Toast";
 
-function ProtectedRoute({ isLoggedIn, children }) {
+function ProtectedRoute({ isLoggedIn, authChecked, children }) {
+  if (!authChecked) {
+    return null;
+  }
   return isLoggedIn ? children : <Navigate to="/login" replace />;
 }
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (token) setIsLoggedIn(true);
+    setIsLoggedIn(!!token);
+    setAuthChecked(true);
+    
     const saved = localStorage.getItem("theme");
     if (saved) setDarkMode(saved === "dark");
   }, []);
@@ -62,7 +68,7 @@ function App() {
           <Route
             path="/login"
             element={
-              isLoggedIn ? (
+              !authChecked ? null : isLoggedIn ? (
                 <Navigate to="/dashboard" replace />
               ) : (
                 <Login onLogin={() => setIsLoggedIn(true)} toggleTheme={toggleTheme} />
@@ -72,7 +78,7 @@ function App() {
           <Route
             path="/register"
             element={
-              isLoggedIn ? (
+              !authChecked ? null : isLoggedIn ? (
                 <Navigate to="/dashboard" replace />
               ) : (
                 <Register onLogin={() => setIsLoggedIn(true)} toggleTheme={toggleTheme} />
@@ -82,7 +88,7 @@ function App() {
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute isLoggedIn={isLoggedIn}>
+              <ProtectedRoute isLoggedIn={isLoggedIn} authChecked={authChecked}>
                 <Dashboard onLogout={handleLogout} toggleTheme={toggleTheme} />
               </ProtectedRoute>
             }
@@ -90,7 +96,7 @@ function App() {
           <Route
             path="/servers"
             element={
-              <ProtectedRoute isLoggedIn={isLoggedIn}>
+              <ProtectedRoute isLoggedIn={isLoggedIn} authChecked={authChecked}>
                 <Servers onLogout={handleLogout} toggleTheme={toggleTheme} />
               </ProtectedRoute>
             }
@@ -98,7 +104,7 @@ function App() {
           <Route
             path="/alerts"
             element={
-              <ProtectedRoute isLoggedIn={isLoggedIn}>
+              <ProtectedRoute isLoggedIn={isLoggedIn} authChecked={authChecked}>
                 <Alerts onLogout={handleLogout} toggleTheme={toggleTheme} />
               </ProtectedRoute>
             }
@@ -106,7 +112,7 @@ function App() {
           <Route
             path="/backups"
             element={
-              <ProtectedRoute isLoggedIn={isLoggedIn}>
+              <ProtectedRoute isLoggedIn={isLoggedIn} authChecked={authChecked}>
                 <BackupDashboard onLogout={handleLogout} toggleTheme={toggleTheme} />
               </ProtectedRoute>
             }
@@ -114,7 +120,7 @@ function App() {
           <Route
             path="/nvr"
             element={
-              <ProtectedRoute isLoggedIn={isLoggedIn}>
+              <ProtectedRoute isLoggedIn={isLoggedIn} authChecked={authChecked}>
                 <NvrDashboard onLogout={handleLogout} toggleTheme={toggleTheme} />
               </ProtectedRoute>
             }
@@ -122,7 +128,7 @@ function App() {
           <Route
             path="/incidents"
             element={
-              <ProtectedRoute isLoggedIn={isLoggedIn}>
+              <ProtectedRoute isLoggedIn={isLoggedIn} authChecked={authChecked}>
                 <Incidents onLogout={handleLogout} toggleTheme={toggleTheme} />
               </ProtectedRoute>
             }
@@ -130,7 +136,7 @@ function App() {
           <Route
             path="/reports"
             element={
-              <ProtectedRoute isLoggedIn={isLoggedIn}>
+              <ProtectedRoute isLoggedIn={isLoggedIn} authChecked={authChecked}>
                 <ReportsRSSI onLogout={handleLogout} toggleTheme={toggleTheme} />
               </ProtectedRoute>
             }
