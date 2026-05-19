@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
-import NotificationPopup from "./NotificationPopup";
 import GlobalStats from "./GlobalStats";
 import DashboardNavbar from "./DashboardNavbar";
 import echo from "../echo";
@@ -288,7 +287,6 @@ function Dashboard({ onLogout, toggleTheme }) {
     <>
       <DashboardNavbar onLogout={onLogout} toggleTheme={toggleTheme} />
       <div className="min-h-screen bg-white dark:bg-gray-900 text-black dark:text-white p-6">
-        <NotificationPopup />
 
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">

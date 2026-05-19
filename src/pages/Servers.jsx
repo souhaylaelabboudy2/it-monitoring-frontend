@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import API from "../services/api";
 import DashboardNavbar from "../components/DashboardNavbar";
 import ServerCard from "../components/ServerCard";
@@ -9,6 +9,10 @@ function Servers({ onLogout, toggleTheme }) {
   const [servers, setServers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [showServerList, setShowServerList] = useState(false);
+  const [highlightedServerId, setHighlightedServerId] = useState(null);
+  const serverRefs = useRef({});
+  const highlightTimeoutRef = useRef(null);
   const { fetchWithRetry } = useRetryableApi();
 
   const transformZabbixHosts = (hosts) => {
@@ -54,6 +58,31 @@ function Servers({ onLogout, toggleTheme }) {
     return () => clearInterval(interval);
   }, [fetchWithRetry]);
 
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleTotalServersClick = () => {
+    setShowServerList((prev) => !prev);
+  };
+
+  const handleServerSelect = (server) => {
+    setShowServerList(false);
+    setHighlightedServerId(server.id);
+    serverRefs.current[server.id]?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+    }
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedServerId(null);
+    }, 2200);
+  };
+
   const metrics = useMemo(() => {
     const total = servers.length;
     const online = servers.filter((s) => s.status === "online").length;
@@ -78,11 +107,16 @@ function Servers({ onLogout, toggleTheme }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3 relative">
+          <button
+            onClick={handleTotalServersClick}
+            className="text-left bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-lg transition-all duration-200"
+            aria-expanded={showServerList}
+          >
             <p className="text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Total Servers</p>
             <p className="mt-4 text-4xl font-bold text-slate-900 dark:text-white">{metrics.total}</p>
-          </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">Click to reveal the server list</p>
+          </button>
           <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
             <p className="text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Online</p>
             <p className="mt-4 text-4xl font-bold text-emerald-600 dark:text-emerald-300">{metrics.online}</p>
@@ -91,6 +125,32 @@ function Servers({ onLogout, toggleTheme }) {
             <p className="text-sm uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Offline</p>
             <p className="mt-4 text-4xl font-bold text-rose-600 dark:text-rose-300">{metrics.offline}</p>
           </div>
+
+          {showServerList && (
+            <div className="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-gray-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl p-4 max-h-72 overflow-y-auto z-20">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">Server list</p>
+                <button
+                  onClick={() => setShowServerList(false)}
+                  className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {servers.map((server) => (
+                  <button
+                    key={server.id}
+                    onClick={() => handleServerSelect(server)}
+                    className="w-full text-left rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                  >
+                    <span className="block font-semibold text-slate-900 dark:text-white">{server.name}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{server.host || "No host info"}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -99,15 +159,22 @@ function Servers({ onLogout, toggleTheme }) {
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">No servers available.</div>
         ) : (
           <div className="grid grid-cols-1 gap-6">
-            {servers.map((server) => (
-              <div key={server.id} className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
-                <ServerCard server={server} />
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{server.name} Metrics</h2>
-                  <ServerChart server={server} />
+            {servers.map((server) => {
+              const isHighlighted = highlightedServerId === server.id;
+              return (
+                <div
+                  key={server.id}
+                  ref={(el) => { serverRefs.current[server.id] = el; }}
+                  className={`grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6 transition-all duration-300 ${isHighlighted ? "ring-2 ring-indigo-500/60 shadow-[0_0_0_1px_rgba(99,102,241,0.35)] animate-pulse" : ""}`}
+                >
+                  <ServerCard server={server} />
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{server.name} Metrics</h2>
+                    <ServerChart server={server} />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
